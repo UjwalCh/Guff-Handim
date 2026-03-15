@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html, body, #root {
+    height: 100%;
+  }
+  html, body {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  input, textarea, select {
+    color: #000000;
+    -webkit-text-fill-color: #000000;
+    caret-color: #000000;
+    opacity: 1;
+  }
+  input::placeholder, textarea::placeholder {
+    color: #475569;
+    opacity: 1;
+  }
+  option {
+    color: #000000;
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-wa-green text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .input-field {
+    @apply w-full bg-wa-hover border border-wa-border rounded-lg px-4 py-2.5 text-wa-text placeholder-wa-text_dim focus:outline-none focus:border-wa-green transition;
+  }
+  .chat-bubble-out {
+    @apply bg-wa-bubble_out rounded-tl-xl rounded-tr-sm rounded-bl-xl rounded-br-xl;
+  }
+  .chat-bubble-in {
+    @apply bg-wa-bubble_in rounded-tl-sm rounded-tr-xl rounded-bl-xl rounded-br-xl;
+  }
+
+  .admin-fancy-card {
+    animation: adminFadeIn 320ms ease-out;
+  }
+
+  .admin-surface-card {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: #e2e8f0;
+  }
+
+  .admin-metric-card {
+    background: linear-gradient(135deg, #020617, #111827 55%, #0f172a);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.24);
+    transition: transform 220ms ease, box-shadow 220ms ease;
+  }
+
+  .admin-metric-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 32px rgba(15, 23, 42, 0.28);
+  }
+
+  .admin-mini-metric {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+  }
+
+  .admin-theme-dark .admin-surface-card {
+    background: rgba(15, 23, 42, 0.72);
+    border-color: rgba(71, 85, 105, 0.65);
+  }
+
+  .admin-theme-dark .admin-mini-metric {
+    background: rgba(30, 41, 59, 0.68);
+    border-color: rgba(71, 85, 105, 0.65);
+  }
+
+  .admin-theme-dark .text-slate-900 {
+    color: #e2e8f0;
+  }
+
+  .admin-theme-dark .text-slate-700 {
+    color: #cbd5e1;
+  }
+
+  .admin-theme-dark .text-slate-600,
+  .admin-theme-dark .text-slate-500 {
+    color: #94a3b8;
+  }
+
+  .admin-theme-dark .text-slate-400 {
+    color: #64748b;
+  }
+
+  .admin-theme-dark .border-slate-200,
+  .admin-theme-dark .border-slate-100,
+  .admin-theme-dark .border-slate-300 {
+    border-color: rgba(71, 85, 105, 0.55);
+  }
+
+  .admin-theme-dark .bg-slate-50,
+  .admin-theme-dark .bg-white,
+  .admin-theme-dark .bg-white\/90 {
+    background-color: rgba(30, 41, 59, 0.62);
+  }
+
+  .admin-theme-dark input,
+  .admin-theme-dark textarea,
+  .admin-theme-dark select {
+    background-color: rgba(15, 23, 42, 0.72);
+    color: #e2e8f0;
+    border-color: rgba(71, 85, 105, 0.65);
+    -webkit-text-fill-color: #e2e8f0;
+  }
+
+  .admin-theme-dark input::placeholder,
+  .admin-theme-dark textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  .landing-animated-bg {
+    background-size: 200% 200%;
+    animation: landingBackgroundShift 14s ease-in-out infinite;
+  }
+
+  .landing-fade-up {
+    opacity: 0;
+    animation: landingFadeUp 560ms ease forwards;
+  }
+
+  .landing-stagger-in {
+    opacity: 0;
+    animation: landingFadeUp 620ms ease forwards;
+  }
+
+  .landing-float {
+    animation: landingFloat 4.8s ease-in-out infinite;
+  }
+
+  .chat-emoji-panel {
+    animation: adminFadeIn 180ms ease-out;
+  }
+}
+
+@keyframes adminFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landingFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landingFloat {
+  0%,
+  100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes landingBackgroundShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
