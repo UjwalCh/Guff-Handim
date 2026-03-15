@@ -13,6 +13,8 @@ const MODES = {
   '/forgot-password': 'forgot',
 };
 
+const OTP_CHALLENGE_MODES = new Set(['signupOtp', 'loginOtp']);
+
 const COUNTRY_CODES = [
   { code: '+93', label: 'Afghanistan (+93)' },
   { code: '+355', label: 'Albania (+355)' },
@@ -258,6 +260,7 @@ export default function LoginPage() {
   const { data } = usePublicSiteConfig();
   const [step, setStep] = useState('portal');
   const [otpPhone, setOtpPhone] = useState('');
+  const [pendingToken, setPendingToken] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -294,6 +297,13 @@ export default function LoginPage() {
 
   async function handlePasswordLogin(formData) {
     const { data } = await api.post('/auth/login', formData);
+    if (data.requiresOTP) {
+      setOtpPhone(data.phone || '');
+      setPendingToken(data.pendingToken || '');
+      setMode('loginOtp');
+      return;
+    }
+
     await ensureEncryptionKeys(data.accessToken);
     setAuth(data.user, data.accessToken);
     navigate('/chats', { replace: true });
@@ -301,6 +311,22 @@ export default function LoginPage() {
 
   async function handleSignup(formData) {
     const { data } = await api.post('/auth/signup', formData);
+    if (data.requiresOTP) {
+      setOtpPhone(data.phone || '');
+      setPendingToken(data.pendingToken || '');
+      setMode('signupOtp');
+      setMessage(data.message || 'OTP sent. Verify to complete signup.');
+      return;
+    }
+
+    await ensureEncryptionKeys(data.accessToken);
+    setAuth(data.user, data.accessToken);
+    navigate('/chats', { replace: true });
+  }
+
+  async function handleChallengeOtp(otp) {
+    const endpoint = mode === 'signupOtp' ? '/auth/signup/verify-otp' : '/auth/login/verify-otp';
+    const { data } = await api.post(endpoint, { pendingToken, otp });
     await ensureEncryptionKeys(data.accessToken);
     setAuth(data.user, data.accessToken);
     navigate('/chats', { replace: true });
@@ -339,6 +365,9 @@ export default function LoginPage() {
     if (mode === 'forgot' || mode === 'reset') {
       payload.identifier = normalizeIdentifier(payload.identifier, loginCode);
     }
+    if (OTP_CHALLENGE_MODES.has(mode)) {
+      payload.otp = String(payload.otp || '').replace(/\D/g, '').slice(0, 6);
+    }
 
     setLoading(true);
     setError('');
@@ -346,6 +375,7 @@ export default function LoginPage() {
     try {
       if (mode === 'login') await handlePasswordLogin(payload);
       if (mode === 'signup') await handleSignup(payload);
+      if (OTP_CHALLENGE_MODES.has(mode)) await handleChallengeOtp(payload.otp);
       if (mode === 'forgot') await handleForgotPassword(payload.identifier);
       if (mode === 'reset') await handleResetPassword(payload);
     } catch (err) {
@@ -414,6 +444,15 @@ export default function LoginPage() {
               onCodeChange={setLoginCode}
               required
             />
+          )}
+
+          {OTP_CHALLENGE_MODES.has(mode) && (
+            <>
+              <p className="text-sm rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-emerald-700">
+                Enter the 6-digit OTP sent to {otpPhone || 'your phone'}.
+              </p>
+              <Field name="otp" placeholder="6-digit OTP" required inputMode="numeric" maxLength={6} />
+            </>
           )}
 
           {mode === 'reset' && (
@@ -616,6 +655,8 @@ function OtpStarter({ onStart, code, onCodeChange }) {
 
 function modeTitle(mode) {
   if (mode === 'signup') return 'Sign Up';
+  if (mode === 'signupOtp') return 'Verify Signup OTP';
+  if (mode === 'loginOtp') return 'Verify Login OTP';
   if (mode === 'forgot') return 'Forgot Password';
   if (mode === 'reset') return 'Reset Password';
   return 'Login';
@@ -623,6 +664,8 @@ function modeTitle(mode) {
 
 function modeSubtitle(mode) {
   if (mode === 'signup') return 'Create your account and get started immediately.';
+  if (mode === 'signupOtp') return 'OTP verification is required to create your account.';
+  if (mode === 'loginOtp') return 'OTP verification is required to complete login.';
   if (mode === 'forgot') return 'Request an OTP to reset your password securely.';
   if (mode === 'reset') return 'Enter the OTP and choose a new password.';
   return 'Sign in with your password or continue with OTP.';
@@ -630,6 +673,7 @@ function modeSubtitle(mode) {
 
 function submitLabel(mode) {
   if (mode === 'signup') return 'Create Account';
+  if (mode === 'signupOtp' || mode === 'loginOtp') return 'Verify OTP';
   if (mode === 'forgot') return 'Send Reset OTP';
   if (mode === 'reset') return 'Reset Password';
   return 'Login';

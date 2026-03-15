@@ -1,9 +1,37 @@
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const { User, RefreshToken } = require('../models');
 const { sendOTP, verifyOTP } = require('../utils/otp');
 const { generateAccessToken, generateRefreshToken, rotateRefreshToken, revokeRefreshToken, hashToken } = require('../utils/jwt');
 const { normalizePhone, sanitizeUser } = require('../utils/helpers');
+
+const PENDING_AUTH_EXPIRY = '10m';
+
+function issueAuthResponse(res, user, req) {
+  const accessToken = generateAccessToken(user.id);
+  return generateRefreshToken(user.id, { ua: req.headers['user-agent'], ip: req.ip })
+    .then((refreshToken) => {
+      res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
+      return { accessToken, user: sanitizeUser(user) };
+    });
+}
+
+function createPendingToken(payload) {
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: PENDING_AUTH_EXPIRY });
+}
+
+function decodePendingToken(token, expectedType) {
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.type !== expectedType) {
+      throw Object.assign(new Error('Invalid OTP challenge'), { status: 400 });
+    }
+    return payload;
+  } catch (_err) {
+    throw Object.assign(new Error('OTP challenge expired. Please try again.'), { status: 401 });
+  }
+}
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -71,21 +99,59 @@ async function signUpHandler(req, res, next) {
 
     if (existing) return res.status(409).json({ error: 'Account already exists for this phone or email' });
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({
+    await sendOTP(phone);
+
+    const pendingToken = createPendingToken({
+      type: 'signup',
       phone,
       email,
       name,
+      password,
+    });
+
+    res.status(202).json({
+      requiresOTP: true,
+      pendingToken,
+      phone,
+      message: 'OTP sent. Verify to complete signup.',
+    });
+  } catch (err) { next(err); }
+}
+
+async function completeSignUpHandler(req, res, next) {
+  try {
+    const { pendingToken, otp } = req.body;
+    const payload = decodePendingToken(pendingToken, 'signup');
+    const phone = normalizePhone(payload.phone);
+    const email = payload.email || null;
+
+    await verifyOTP(phone, otp);
+
+    const existing = await User.findOne({
+      where: {
+        [Op.or]: [
+          { phone },
+          ...(email ? [{ email }] : []),
+        ],
+      },
+    });
+
+    if (existing) {
+      return res.status(409).json({ error: 'Account already exists for this phone or email' });
+    }
+
+    const passwordHash = await bcrypt.hash(payload.password, 12);
+    const user = await User.create({
+      phone,
+      email,
+      name: payload.name,
       passwordHash,
       authMethod: 'hybrid',
       isVerified: true,
     });
 
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = await generateRefreshToken(user.id, { ua: req.headers['user-agent'], ip: req.ip });
-    res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
-
-    res.status(201).json({ accessToken, user: sanitizeUser(user) });
+    const auth = await issueAuthResponse(res, user, req);
+    res.status(201).json(auth);
   } catch (err) { next(err); }
 }
 
@@ -109,12 +175,37 @@ async function loginWithPasswordHandler(req, res, next) {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = await generateRefreshToken(user.id, { ua: req.headers['user-agent'], ip: req.ip });
-    res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
+    await sendOTP(user.phone);
+
+    const pendingToken = createPendingToken({
+      type: 'login',
+      userId: user.id,
+      phone: user.phone,
+    });
+
+    res.json({
+      requiresOTP: true,
+      pendingToken,
+      phone: user.phone,
+      message: 'OTP sent. Verify to complete login.',
+    });
+  } catch (err) { next(err); }
+}
+
+async function verifyLoginOTPHandler(req, res, next) {
+  try {
+    const { pendingToken, otp } = req.body;
+    const payload = decodePendingToken(pendingToken, 'login');
+
+    await verifyOTP(payload.phone, otp);
+
+    const user = await User.findOne({ where: { id: payload.userId, isActive: true } });
+    if (!user) return res.status(404).json({ error: 'Account not found' });
+    if (user.isSuspended) return res.status(403).json({ error: 'Account is suspended' });
 
     await user.update({ authMethod: user.authMethod === 'otp' ? 'hybrid' : user.authMethod });
-    res.json({ accessToken, user: sanitizeUser(user) });
+    const auth = await issueAuthResponse(res, user, req);
+    res.json(auth);
   } catch (err) { next(err); }
 }
 
@@ -219,7 +310,9 @@ module.exports = {
   sendOTPHandler,
   verifyOTPHandler,
   signUpHandler,
+  completeSignUpHandler,
   loginWithPasswordHandler,
+  verifyLoginOTPHandler,
   requestPasswordResetHandler,
   resetPasswordHandler,
   setupProfileHandler,

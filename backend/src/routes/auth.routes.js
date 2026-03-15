@@ -8,7 +8,9 @@ const {
   sendOTPHandler,
   verifyOTPHandler,
   signUpHandler,
+  completeSignUpHandler,
   loginWithPasswordHandler,
+  verifyLoginOTPHandler,
   requestPasswordResetHandler,
   resetPasswordHandler,
   setupProfileHandler,
@@ -42,10 +44,20 @@ router.post('/signup', [
   body('password').isLength({ min: 8, max: 120 }),
 ], validate, signUpHandler);
 
+router.post('/signup/verify-otp', [
+  body('pendingToken').isString().isLength({ min: 20 }),
+  body('otp').isLength({ min: 6, max: 6 }).isNumeric(),
+], validate, completeSignUpHandler);
+
 router.post('/login', [
   body('identifier').isString().isLength({ min: 3, max: 160 }),
   body('password').isLength({ min: 8, max: 120 }),
 ], validate, loginWithPasswordHandler);
+
+router.post('/login/verify-otp', [
+  body('pendingToken').isString().isLength({ min: 20 }),
+  body('otp').isLength({ min: 6, max: 6 }).isNumeric(),
+], validate, verifyLoginOTPHandler);
 
 router.post('/forgot-password', [
   body('identifier').isString().isLength({ min: 3, max: 160 }),
