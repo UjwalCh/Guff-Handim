@@ -7,9 +7,15 @@ let io;
 
 function getAllowedOrigins() {
   const raw = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:5173';
+
+  const normalizeOrigin = (value) => value
+    .trim()
+    .replace(/\/+$/, '')
+    .toLowerCase();
+
   return raw
     .split(',')
-    .map((value) => value.trim())
+    .map((value) => normalizeOrigin(value))
     .filter(Boolean);
 }
 
@@ -20,7 +26,8 @@ function initSocket(server) {
     cors: {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
+        const normalizedOrigin = origin.trim().replace(/\/+$/, '').toLowerCase();
+        if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
         return callback(new Error('CORS origin not allowed'));
       },
       credentials: true,
