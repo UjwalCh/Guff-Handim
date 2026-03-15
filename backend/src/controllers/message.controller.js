@@ -1,4 +1,4 @@
-const { Message, MessageStatus, MessageReaction, Chat, ChatMember, User } = require('../models');
+const { Message, MessageStatus, MessageReaction, Chat, ChatMember, User, StarredMessage } = require('../models');
 const { getIO } = require('../socket');
 
 const MESSAGE_EDIT_WINDOW_MINUTES = parseInt(process.env.MESSAGE_EDIT_WINDOW_MINUTES || '15', 10);
@@ -165,6 +165,57 @@ async function removeReaction(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function starMessage(req, res, next) {
+  try {
+    const message = await Message.findByPk(req.params.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+
+    const membership = await ChatMember.findOne({
+      where: { chatId: message.chatId, userId: req.user.id, isActive: true },
+    });
+    if (!membership) return res.status(403).json({ error: 'Not a member of this chat' });
+
+    await StarredMessage.findOrCreate({
+      where: { messageId: message.id, userId: req.user.id },
+      defaults: { messageId: message.id, userId: req.user.id },
+    });
+
+    const starredBy = await StarredMessage.findAll({ where: { messageId: message.id }, attributes: ['userId', 'messageId'] });
+    res.json({ messageId: message.id, starred: true, starredBy });
+  } catch (err) { next(err); }
+}
+
+async function unstarMessage(req, res, next) {
+  try {
+    const message = await Message.findByPk(req.params.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+
+    await StarredMessage.destroy({ where: { messageId: message.id, userId: req.user.id } });
+    const starredBy = await StarredMessage.findAll({ where: { messageId: message.id }, attributes: ['userId', 'messageId'] });
+    res.json({ messageId: message.id, starred: false, starredBy });
+  } catch (err) { next(err); }
+}
+
+async function listStarredMessages(req, res, next) {
+  try {
+    const starred = await StarredMessage.findAll({
+      where: { userId: req.user.id },
+      include: [{
+        model: Message,
+        as: 'message',
+        where: {
+          ...(req.query.chatId ? { chatId: req.query.chatId } : {}),
+        },
+        include: [{ model: User, as: 'sender', attributes: ['id', 'name', 'avatar'] }],
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 300,
+    });
+
+    res.json({ messages: starred.map((entry) => entry.message).filter(Boolean) });
+  } catch (err) { next(err); }
+}
+
 async function markRead(req, res, next) {
   try {
     const { chatId, messageIds } = req.body;
@@ -182,4 +233,14 @@ async function markRead(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { sendMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead };
+module.exports = {
+  sendMessage,
+  editMessage,
+  deleteMessage,
+  addReaction,
+  removeReaction,
+  starMessage,
+  unstarMessage,
+  listStarredMessages,
+  markRead,
+};

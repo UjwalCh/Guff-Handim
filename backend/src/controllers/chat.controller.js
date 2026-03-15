@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Chat, ChatMember, Message, User, Block, sequelize } = require('../models');
+const { Chat, ChatMember, Message, User, Block, StarredMessage, sequelize } = require('../models');
 const { paginate } = require('../utils/helpers');
 
 async function getMyChats(req, res, next) {
@@ -180,6 +180,12 @@ async function getChatMessages(req, res, next) {
       include: [
         { model: User, as: 'sender', attributes: ['id', 'name', 'avatar'] },
         { association: 'reactions', include: [{ model: User, as: 'reactor', attributes: ['id', 'name'] }] },
+        {
+          association: 'starredBy',
+          where: { userId: req.user.id },
+          required: false,
+          attributes: ['userId', 'messageId'],
+        },
         { association: 'readReceipts', attributes: ['userId', 'status', 'timestamp'] },
       ],
       order: [['createdAt', 'DESC']],

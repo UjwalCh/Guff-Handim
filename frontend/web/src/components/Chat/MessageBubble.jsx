@@ -3,10 +3,11 @@ import { formatMessageTime, clsx, getInitials } from '../../utils/helpers';
 import MediaViewer from '../Media/MediaViewer';
 import { toAbsoluteAssetUrl } from '../../utils/runtimeConfig';
 
-export default function MessageBubble({ message, isGroup, onReply, onDelete, onEdit, onReact }) {
+export default function MessageBubble({ message, isGroup, onReply, onDelete, onEdit, onForward, onStar, onReact }) {
   const myId = useAuthStore(s => s.user?.id);
   const isMine = message.senderId === myId;
   const withinModifyWindow = Date.now() - new Date(message.createdAt).getTime() <= 15 * 60 * 1000;
+  const isStarred = (message.starredBy || []).some((entry) => entry.userId === myId);
 
   const mediaFileUrl = toAbsoluteAssetUrl(message.fileUrl);
   const mediaThumbnailUrl = toAbsoluteAssetUrl(message.thumbnailUrl);
@@ -107,6 +108,7 @@ export default function MessageBubble({ message, isGroup, onReply, onDelete, onE
               </span>
             )}
             {message.isForwarded && <span className="text-wa-text_dim text-[10px]">↪ Forwarded</span>}
+            {isStarred && <span className="text-amber-300 text-[10px]">★</span>}
           </div>
         </div>
 
@@ -134,6 +136,14 @@ export default function MessageBubble({ message, isGroup, onReply, onDelete, onE
           <button onClick={() => onReply && onReply(message)} title="Reply"
             className="bg-wa-panel text-wa-icon hover:text-wa-text rounded-full p-1.5 shadow text-xs">
             ↩
+          </button>
+          <button onClick={() => onForward && onForward(message)} title="Forward"
+            className="bg-wa-panel text-wa-icon hover:text-wa-text rounded-full p-1.5 shadow text-xs">
+            ↪
+          </button>
+          <button onClick={() => onStar && onStar(message)} title={isStarred ? 'Unstar' : 'Star'}
+            className="bg-wa-panel text-amber-300 hover:text-amber-200 rounded-full p-1.5 shadow text-xs">
+            {isStarred ? '★' : '☆'}
           </button>
           {isMine && withinModifyWindow && message.type === 'text' && !message.isDeleted && (
             <button onClick={() => onEdit && onEdit(message)} title="Edit"

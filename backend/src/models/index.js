@@ -122,6 +122,12 @@ const MessageReaction = sequelize.define('MessageReaction', {
   emoji:     { type: DataTypes.STRING(10), allowNull: false },
 });
 
+// ─── STARRED MESSAGE ──────────────────────────────────────────────────────
+const StarredMessage = sequelize.define('StarredMessage', {
+  messageId: { type: DataTypes.UUID, primaryKey: true },
+  userId:    { type: DataTypes.UUID, primaryKey: true },
+});
+
 // ─── STATUS / STORY ───────────────────────────────────────────────────────
 const Status = sequelize.define('Status', {
   id:               { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
@@ -238,6 +244,10 @@ Message.hasMany(MessageReaction, { foreignKey: 'messageId', as: 'reactions' });
 MessageReaction.belongsTo(Message, { foreignKey: 'messageId' });
 MessageReaction.belongsTo(User, { foreignKey: 'userId', as: 'reactor' });
 
+Message.hasMany(StarredMessage, { foreignKey: 'messageId', as: 'starredBy' });
+StarredMessage.belongsTo(Message, { foreignKey: 'messageId', as: 'message' });
+StarredMessage.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
 Message.hasMany(MessageStatus, { foreignKey: 'messageId', as: 'readReceipts' });
 
 User.hasMany(Status, { foreignKey: 'userId', as: 'statuses' });
@@ -271,6 +281,7 @@ module.exports = {
   Message,
   MessageStatus,
   MessageReaction,
+  StarredMessage,
   Status,
   StatusView,
   OTP,

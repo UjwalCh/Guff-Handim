@@ -80,6 +80,18 @@ export const useChatStore = create((set, get) => ({
     });
   },
 
+  updateMessageStars: (messageId, starredBy) => {
+    set(s => {
+      const newMsgs = { ...s.messages };
+      for (const chatId of Object.keys(newMsgs)) {
+        newMsgs[chatId] = newMsgs[chatId].map(m =>
+          m.id === messageId ? { ...m, starredBy } : m
+        );
+      }
+      return { messages: newMsgs };
+    });
+  },
+
   setGroupKey: (chatId, key) =>
     set(s => ({ groupKeys: { ...s.groupKeys, [chatId]: key } })),
 

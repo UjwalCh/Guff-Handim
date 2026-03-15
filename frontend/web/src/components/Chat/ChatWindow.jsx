@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../utils/api';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
-import { decryptDirect, decryptGroup, loadKeys } from '../../utils/encryption';
+import { decryptDirect, decryptGroup, encryptDirect, encryptGroup, loadKeys } from '../../utils/encryption';
 import { groupMessagesByDate } from '../../utils/helpers';
 import ChatHeader from './ChatHeader';
 import MessageBubble from './MessageBubble';
@@ -14,11 +14,17 @@ import { toAbsoluteAssetUrl } from '../../utils/runtimeConfig';
 export default function ChatWindow({ chat, onBack }) {
   const [replyTo, setReplyTo] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
+  const [forwardToChats, setForwardToChats] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [starOnly, setStarOnly] = useState(false);
   const [reactTarget, setReactTarget] = useState(null);
   const [showReactPicker, setShowReactPicker] = useState(false);
   const bottomRef = useRef();
   const myId = useAuthStore(s => s.user?.id);
-  const { setMessages, messages: allMsgs, groupKeys, updateMessage, updateChatMeta } = useChatStore();
+  const chats = useChatStore(s => s.chats);
+  const { setMessages, messages: allMsgs, groupKeys, updateMessage, updateMessageStars, updateChatMeta } = useChatStore();
   const msgs = allMsgs[chat?.id] || [];
   const gk = groupKeys[chat?.id];
 
@@ -101,6 +107,72 @@ export default function ChatWindow({ chat, onBack }) {
     }
   }
 
+  async function handleToggleStar(message) {
+    const isStarred = (message.starredBy || []).some((entry) => entry.userId === myId);
+    const method = isStarred ? 'delete' : 'post';
+    const { data } = await api[method](`/messages/${message.id}/star`);
+    updateMessageStars(message.id, data.starredBy || []);
+  }
+
+  function openForward(message) {
+    setForwardTarget(message);
+    setForwardToChats([]);
+  }
+
+  function toggleForwardChat(chatId) {
+    setForwardToChats((prev) => prev.includes(chatId) ? prev.filter((id) => id !== chatId) : [...prev, chatId]);
+  }
+
+  function encryptForTargetChat(targetChat, plaintext) {
+    const keys = loadKeys();
+    if (!keys) return null;
+
+    const gk = groupKeys[targetChat.id];
+    if (targetChat.isGroup && gk) {
+      return encryptGroup(plaintext, gk);
+    }
+
+    const other = targetChat.members?.find((member) => member.id !== myId);
+    if (!other?.publicKey) return null;
+    return encryptDirect(plaintext, other.publicKey, keys.secretKey);
+  }
+
+  async function submitForward() {
+    if (!forwardTarget || forwardToChats.length === 0) return;
+
+    for (const targetChatId of forwardToChats) {
+      const targetChat = chats.find((entry) => entry.id === targetChatId);
+      if (!targetChat) continue;
+
+      if (forwardTarget.type === 'text') {
+        const plain = forwardTarget.decryptedContent;
+        if (!plain) continue;
+
+        const encryptedContent = encryptForTargetChat(targetChat, plain);
+        if (!encryptedContent) continue;
+
+        await api.post(`/chats/${targetChat.id}/messages`, {
+          type: 'text',
+          encryptedContent,
+          isForwarded: true,
+        });
+      } else {
+        await api.post(`/chats/${targetChat.id}/messages`, {
+          type: forwardTarget.type,
+          fileUrl: forwardTarget.fileUrl,
+          fileName: forwardTarget.fileName,
+          fileSize: forwardTarget.fileSize,
+          mimeType: forwardTarget.mimeType,
+          thumbnailUrl: forwardTarget.thumbnailUrl,
+          isForwarded: true,
+        });
+      }
+    }
+
+    setForwardTarget(null);
+    setForwardToChats([]);
+  }
+
   async function handleEmojiReact({ emoji }) {
     if (!reactTarget) return;
     await api.post(`/messages/${reactTarget.id}/reactions`, { emoji });
@@ -108,7 +180,18 @@ export default function ChatWindow({ chat, onBack }) {
     setReactTarget(null);
   }
 
-  const grouped = groupMessagesByDate(msgs);
+  const filteredMessages = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return msgs.filter((msg) => {
+      const isStarred = (msg.starredBy || []).some((entry) => entry.userId === myId);
+      if (starOnly && !isStarred) return false;
+      if (!q) return true;
+      const haystack = `${msg.decryptedContent || ''} ${msg.fileName || ''}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [msgs, searchTerm, starOnly, myId]);
+
+  const grouped = groupMessagesByDate(filteredMessages);
   const recentMedia = useMemo(
     () => msgs.filter((m) => (m.type === 'image' || m.type === 'video') && m.fileUrl).slice(-12).reverse(),
     [msgs]
@@ -123,6 +206,31 @@ export default function ChatWindow({ chat, onBack }) {
         onTogglePin={handleTogglePin}
         onToggleArchive={handleToggleArchive}
       />
+
+      <div className="px-3 py-2 border-b border-wa-border bg-wa-panel/70 flex items-center gap-2">
+        <button
+          type="button"
+          className={`text-xs px-3 py-1 rounded-full ${showSearch ? 'bg-wa-green text-white' : 'bg-wa-hover text-wa-text_dim'}`}
+          onClick={() => setShowSearch((prev) => !prev)}
+        >
+          Search
+        </button>
+        <button
+          type="button"
+          className={`text-xs px-3 py-1 rounded-full ${starOnly ? 'bg-wa-green text-white' : 'bg-wa-hover text-wa-text_dim'}`}
+          onClick={() => setStarOnly((prev) => !prev)}
+        >
+          Starred
+        </button>
+        {showSearch && (
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search in this chat"
+            className="flex-1 bg-wa-hover rounded-lg px-3 py-1.5 text-sm text-wa-text placeholder-wa-text_dim outline-none"
+          />
+        )}
+      </div>
 
       {recentMedia.length > 0 && (
         <div className="px-3 py-2 border-b border-wa-border bg-wa-panel/80">
@@ -176,6 +284,8 @@ export default function ChatWindow({ chat, onBack }) {
               onReply={setReplyTo}
               onDelete={handleDelete}
               onEdit={() => setEditTarget(item.message)}
+              onForward={() => openForward(item.message)}
+              onStar={() => handleToggleStar(item.message)}
               onReact={handleReact}
             />
           )
@@ -198,6 +308,33 @@ export default function ChatWindow({ chat, onBack }) {
         onCancelEdit={() => setEditTarget(null)}
         onClearReply={() => setReplyTo(null)}
       />
+
+      {forwardTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-wa-border bg-wa-panel p-4 max-h-[80vh] overflow-auto">
+            <p className="text-wa-text font-semibold text-lg">Forward Message</p>
+            <p className="text-wa-text_dim text-sm mt-1">Select one or more chats.</p>
+
+            <div className="mt-4 space-y-2">
+              {chats.filter((entry) => entry.id !== chat.id).map((entry) => {
+                const checked = forwardToChats.includes(entry.id);
+                const title = entry.isGroup ? entry.name : (entry.members?.find((m) => m.id !== myId)?.name || 'Direct chat');
+                return (
+                  <label key={entry.id} className="flex items-center gap-3 rounded-xl bg-wa-hover px-3 py-2 cursor-pointer">
+                    <input type="checkbox" checked={checked} onChange={() => toggleForwardChat(entry.id)} />
+                    <span className="text-wa-text text-sm">{title}</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="px-4 py-2 rounded-xl bg-wa-hover text-wa-text_dim" onClick={() => setForwardTarget(null)}>Cancel</button>
+              <button className="px-4 py-2 rounded-xl bg-wa-green text-white disabled:opacity-60" disabled={forwardToChats.length === 0} onClick={submitForward}>Forward</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
