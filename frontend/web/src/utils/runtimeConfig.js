@@ -1,4 +1,17 @@
-const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').trim();
+const RENDER_BACKEND_ORIGIN = 'https://chatapp-backend-dq7j.onrender.com';
+
+function getDefaultApiBaseUrl() {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+    if (host.endsWith('vercel.app')) {
+      return `${RENDER_BACKEND_ORIGIN}/api`;
+    }
+  }
+
+  return '/api';
+}
+
+const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || getDefaultApiBaseUrl()).trim();
 
 function normalizeApiBaseUrl(value) {
   if (!value) return '/api';
