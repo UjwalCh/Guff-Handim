@@ -15,7 +15,7 @@ services:
       - key: DB_DIALECT
         value: sqlite
       - key: SQLITE_STORAGE
-        value: /var/data/dev.sqlite
+        value: /tmp/dev.sqlite
       - key: FRONTEND_URLS
         sync: false
       - key: JWT_SECRET
@@ -40,7 +40,3 @@ services:
         sync: false
       - key: TWILIO_PHONE_NUMBER
         sync: false
-    disks:
-      - name: chatapp-data
-        mountPath: /var/data
-        sizeGB: 1
