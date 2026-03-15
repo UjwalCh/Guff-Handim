@@ -22,7 +22,7 @@ export default function Sidebar() {
       to={to}
       className={({ isActive }) =>
         `flex flex-col items-center gap-1 py-3 px-4 relative transition ${
-          isActive ? 'text-wa-green border-r-2 border-wa-green bg-wa-hover' : 'text-wa-icon hover:text-wa-text'
+          isActive ? 'text-white bg-wa-green/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]' : 'text-wa-icon hover:text-wa-text'
         }`
       }
       title={label}
@@ -40,10 +40,10 @@ export default function Sidebar() {
   );
 
   return (
-    <div className="flex flex-col h-full bg-wa-panel border-r border-wa-border w-16">
+    <div className="flex flex-col h-full bg-[linear-gradient(180deg,#1c2730,#1b2b34)] border-r border-wa-border w-16">
       {/* App icon */}
       <div className="flex items-center justify-center py-4">
-        <img src={data.branding.logoUrl || '/icon.svg'} alt={data.branding.appName} className="w-10 h-10 rounded-2xl object-cover shadow-lg" />
+        <img src={data.branding.logoUrl || '/icon.svg'} alt={data.branding.appName} className="w-10 h-10 rounded-2xl object-cover shadow-lg ring-1 ring-white/10" />
       </div>
 
       <nav className="flex flex-col flex-1">

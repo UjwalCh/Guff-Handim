@@ -4,13 +4,16 @@ import api from '../../utils/api';
 import { getSocket } from '../../hooks/useSocket';
 import { encryptDirect, encryptGroup, loadKeys } from '../../utils/encryption';
 import { useChatStore } from '../../store/chatStore';
+import { useAuthStore } from '../../store/authStore';
 
 export default function MessageInput({ chat, replyTo, onClearReply }) {
+  const myId = useAuthStore(s => s.user?.id);
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
   const quickEmojis = ['😀', '😂', '😍', '🔥', '👍', '🙏', '🎉', '❤️'];
   const fileRef = useRef();
+  const textRef = useRef();
   const typingTimerRef = useRef(null);
   const socket = getSocket();
   const groupKeys = useChatStore(s => s.groupKeys);
@@ -26,7 +29,7 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
       return encryptGroup(plaintext, gk);
     }
     // 1:1: encrypt with the other member's public key
-    const other = chat.members?.find(m => m.id !== keys.publicKey);
+    const other = chat.members?.find(m => m.id !== myId);
     if (!other?.publicKey) return null;
     return encryptDirect(plaintext, other.publicKey, keys.secretKey);
   }
@@ -111,6 +114,12 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
     }
   }
 
+  function resizeTextArea(target) {
+    if (!target) return;
+    target.style.height = 'auto';
+    target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+  }
+
   return (
     <div className="bg-wa-panel px-3 py-3 relative">
       {/* Reply preview */}
@@ -161,8 +170,13 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
 
         {/* Text input */}
         <textarea
+          ref={textRef}
           value={text}
-          onChange={e => { setText(e.target.value); emitTyping(e.target.value); }}
+          onChange={e => {
+            setText(e.target.value);
+            emitTyping(e.target.value);
+            resizeTextArea(e.target);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Type a message"
           rows={1}
@@ -190,19 +204,28 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
 
         {/* Send button */}
         <button
-          type="submit"
-          disabled={!text.trim() && !uploading}
+          type={text.trim() ? 'submit' : 'button'}
+          onClick={() => {
+            if (!text.trim()) {
+              fileRef.current?.click();
+            }
+          }}
+          disabled={uploading}
           className="w-10 h-10 bg-wa-green rounded-full flex items-center justify-center hover:bg-opacity-90 transition disabled:opacity-50"
-          title="Send"
+          title={text.trim() ? 'Send' : 'Attach media'}
         >
           {uploading ? (
             <svg className="animate-spin w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <circle cx="12" cy="12" r="10" strokeWidth="3" className="opacity-25" />
               <path d="M4 12a8 8 0 018-8" strokeWidth="3" />
             </svg>
-          ) : (
+          ) : text.trim() ? (
             <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5">
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5">
+              <path d="M12 14a3 3 0 003-3V7a3 3 0 10-6 0v4a3 3 0 003 3zm5-3a1 1 0 112 0 7 7 0 01-6 6.92V21h3a1 1 0 110 2H8a1 1 0 010-2h3v-3.08A7 7 0 015 11a1 1 0 112 0 5 5 0 0010 0z"/>
             </svg>
           )}
         </button>

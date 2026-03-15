@@ -1,5 +1,6 @@
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
+import { useMemo, useState } from 'react';
 import { formatChatTime, getInitials, clsx } from '../../utils/helpers';
 
 export default function ChatList({ onNewChat, onSelectChat }) {
@@ -7,6 +8,8 @@ export default function ChatList({ onNewChat, onSelectChat }) {
   const activeChatId = useChatStore(s => s.activeChatId);
   const unread = useChatStore(s => s.unreadCounts);
   const myId = useAuthStore(s => s.user?.id);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
 
   function getChatDisplay(chat) {
     if (chat.isGroup) return { name: chat.name, avatar: chat.avatar, subtitle: chat.description };
@@ -30,6 +33,30 @@ export default function ChatList({ onNewChat, onSelectChat }) {
     return last.decryptedContent || last.encryptedContent ? '🔒 Encrypted message' : '';
   }
 
+  const visibleChats = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
+    return chats.filter((chat) => {
+      const display = getChatDisplay(chat);
+      const last = getLastMessage(chat).toLowerCase();
+      const count = unread[chat.id] || 0;
+
+      if (filter === 'unread' && count === 0) {
+        return false;
+      }
+
+      if (!q) {
+        return true;
+      }
+
+      return (
+        (display.name || '').toLowerCase().includes(q)
+        || (display.subtitle || '').toLowerCase().includes(q)
+        || last.includes(q)
+      );
+    });
+  }, [chats, filter, query, unread]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -48,6 +75,28 @@ export default function ChatList({ onNewChat, onSelectChat }) {
 
       {/* Search bar */}
       <div className="px-3 py-2 bg-wa-bg">
+        <div className="flex items-center gap-2 mb-2">
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className={clsx(
+              'text-xs px-3 py-1 rounded-full transition',
+              filter === 'all' ? 'bg-wa-green text-white' : 'bg-wa-hover text-wa-text_dim hover:text-wa-text'
+            )}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('unread')}
+            className={clsx(
+              'text-xs px-3 py-1 rounded-full transition',
+              filter === 'unread' ? 'bg-wa-green text-white' : 'bg-wa-hover text-wa-text_dim hover:text-wa-text'
+            )}
+          >
+            Unread
+          </button>
+        </div>
         <div className="flex items-center bg-wa-hover rounded-lg px-3 py-1.5 gap-2">
           <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-wa-icon shrink-0">
             <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
@@ -55,6 +104,8 @@ export default function ChatList({ onNewChat, onSelectChat }) {
           <input
             type="text"
             placeholder="Search chats"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             className="bg-transparent text-wa-text text-sm w-full focus:outline-none placeholder-wa-text_dim"
           />
         </div>
@@ -62,13 +113,13 @@ export default function ChatList({ onNewChat, onSelectChat }) {
 
       {/* Chat list */}
       <div className="flex-1 overflow-y-auto">
-        {chats.length === 0 && (
+        {visibleChats.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-wa-text_dim text-sm gap-2">
-            <p>No chats yet.</p>
+            <p>{chats.length === 0 ? 'No chats yet.' : 'No chats match your search.'}</p>
             <button onClick={onNewChat} className="text-wa-green hover:underline">Start a new chat</button>
           </div>
         )}
-        {chats.map(chat => {
+        {visibleChats.map(chat => {
           const { name, avatar, isOnline, subtitle } = getChatDisplay(chat);
           const lastMsg = getLastMessage(chat);
           const lastTime = chat.messages?.[0]?.createdAt;
