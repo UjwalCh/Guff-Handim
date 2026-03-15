@@ -32,7 +32,7 @@ async function sendOTP(phone) {
     logger.info(`OTP sent via SMS to ${phone}`);
   } else {
     // Dev mode — log to console
-    logger.info(`[DEV] OTP for ${phone}: ${otp}`);
+    logger.warn(`[DEV] OTP for ${phone}: ${otp}`);
   }
 
   return true;

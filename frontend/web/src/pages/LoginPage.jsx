@@ -349,7 +349,7 @@ export default function LoginPage() {
       if (mode === 'forgot') await handleForgotPassword(payload.identifier);
       if (mode === 'reset') await handleResetPassword(payload);
     } catch (err) {
-      setError(err.response?.data?.error || 'Request failed');
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -640,8 +640,12 @@ function composePhone(countryCode, rawNumber) {
   if (raw.startsWith('+')) {
     return `+${raw.replace(/[^\d]/g, '')}`;
   }
-  const digits = raw.replace(/[^\d]/g, '');
+  let digits = raw.replace(/[^\d]/g, '');
   if (!digits) return '';
+
+  // Remove local trunk prefix (e.g. 0424... -> 424...) when adding a country code.
+  digits = digits.replace(/^0+/, '');
+
   const normalizedCode = (countryCode || '+91').replace(/\s+/g, '');
   return `${normalizedCode}${digits}`;
 }
@@ -654,4 +658,19 @@ function normalizeIdentifier(identifier, countryCode) {
     return composePhone(countryCode, value);
   }
   return value;
+}
+
+function getApiErrorMessage(err) {
+  const data = err?.response?.data;
+  if (!data) return 'Request failed';
+
+  if (Array.isArray(data.details) && data.details.length > 0) {
+    const detail = data.details[0];
+    if (detail?.path === 'phone') {
+      return 'Please enter a valid phone number for the selected country.';
+    }
+    return detail?.msg || data.error || 'Request failed';
+  }
+
+  return data.error || 'Request failed';
 }
