@@ -4,7 +4,7 @@ import { useCallStore } from '../../store/callStore';
 import { useWebRTC } from '../../hooks/useWebRTC';
 import { formatLastSeen, getInitials } from '../../utils/helpers';
 
-export default function ChatHeader({ chat, onBack, onOpenInfo, onTogglePin, onToggleArchive }) {
+export default function ChatHeader({ chat, onBack, onOpenInfo, onTogglePin, onToggleArchive, onToggleMute }) {
   const myId = useAuthStore(s => s.user?.id);
   const typingUsers = useChatStore(s => s.typingUsers[chat?.id]);
   const { startCall, hangUp } = useWebRTC();
@@ -70,6 +70,13 @@ export default function ChatHeader({ chat, onBack, onOpenInfo, onTogglePin, onTo
 
       {/* Action buttons */}
       <div className="flex items-center gap-1">
+        <button
+          onClick={() => onToggleMute?.(!(chat.myNotificationsMutedUntil && new Date(chat.myNotificationsMutedUntil) > new Date()))}
+          className="text-wa-icon hover:text-wa-text transition p-2 rounded-full hover:bg-wa-hover"
+          title={chat.myNotificationsMutedUntil && new Date(chat.myNotificationsMutedUntil) > new Date() ? 'Unmute notifications' : 'Mute notifications'}
+        >
+          {chat.myNotificationsMutedUntil && new Date(chat.myNotificationsMutedUntil) > new Date() ? '🔕' : '🔔'}
+        </button>
         <button
           onClick={() => onTogglePin?.(!chat.myIsPinned)}
           className="text-wa-icon hover:text-wa-text transition p-2 rounded-full hover:bg-wa-hover"

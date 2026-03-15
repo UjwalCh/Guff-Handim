@@ -79,6 +79,7 @@ const ChatMember = sequelize.define('ChatMember', {
   isPinned:          { type: DataTypes.BOOLEAN, defaultValue: false },
   pinnedAt:          { type: DataTypes.DATE, allowNull: true },
   isArchived:        { type: DataTypes.BOOLEAN, defaultValue: false },
+  notificationsMutedUntil: { type: DataTypes.DATE, allowNull: true },
   isActive:          { type: DataTypes.BOOLEAN, defaultValue: true },
   joinedAt:          { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   // Group E2EE: group symmetric key encrypted with this member's public key (stored as JSON {nonce, ciphertext})

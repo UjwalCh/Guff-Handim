@@ -37,6 +37,7 @@ async function getMyChats(req, res, next) {
         myIsPinned: Boolean(m.isPinned),
         myPinnedAt: m.pinnedAt,
         myIsArchived: Boolean(m.isArchived),
+        myNotificationsMutedUntil: m.notificationsMutedUntil,
       }));
 
     chats.sort((a, b) => {
@@ -91,6 +92,36 @@ async function setArchivedState(req, res, next) {
     await membership.update({ isArchived: shouldArchive });
 
     res.json({ message: shouldArchive ? 'Chat archived' : 'Chat restored', isArchived: shouldArchive });
+  } catch (err) { next(err); }
+}
+
+async function setMutedState(req, res, next) {
+  try {
+    const membership = await ChatMember.findOne({
+      where: { chatId: req.params.id, userId: req.user.id, isActive: true },
+    });
+
+    if (!membership) return res.status(403).json({ error: 'Not a member of this chat' });
+
+    const muted = req.body?.muted !== false;
+    let mutedUntil = null;
+
+    if (muted) {
+      if (req.body?.mutedUntil) {
+        mutedUntil = new Date(req.body.mutedUntil);
+      } else {
+        mutedUntil = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      }
+      if (Number.isNaN(mutedUntil.getTime())) {
+        return res.status(400).json({ error: 'Invalid mutedUntil date' });
+      }
+    }
+
+    await membership.update({ notificationsMutedUntil: muted ? mutedUntil : null });
+    res.json({
+      message: muted ? 'Chat notifications muted' : 'Chat notifications unmuted',
+      notificationsMutedUntil: membership.notificationsMutedUntil,
+    });
   } catch (err) { next(err); }
 }
 
@@ -218,4 +249,5 @@ module.exports = {
   updateChatSettings,
   setPinnedState,
   setArchivedState,
+  setMutedState,
 };

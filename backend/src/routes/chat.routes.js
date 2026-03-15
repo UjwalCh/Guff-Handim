@@ -2,7 +2,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { getMyChats, createOrGetDirectChat, getChatById, getChatMessages, updateChatSettings, setPinnedState, setArchivedState } = require('../controllers/chat.controller');
+const { getMyChats, createOrGetDirectChat, getChatById, getChatMessages, updateChatSettings, setPinnedState, setArchivedState, setMutedState } = require('../controllers/chat.controller');
 const { sendMessage } = require('../controllers/message.controller');
 
 const router = express.Router();
@@ -20,5 +20,6 @@ router.post('/:id/messages',
 router.patch('/:id/settings', [body('disappearingTimer').isInt({ min: 0 })], validate, updateChatSettings);
 router.patch('/:id/pin', [body('pinned').optional().isBoolean()], validate, setPinnedState);
 router.patch('/:id/archive', [body('archived').optional().isBoolean()], validate, setArchivedState);
+router.patch('/:id/mute', [body('muted').optional().isBoolean(), body('mutedUntil').optional().isISO8601()], validate, setMutedState);
 
 module.exports = router;

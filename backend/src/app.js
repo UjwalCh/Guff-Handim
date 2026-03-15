@@ -125,6 +125,7 @@ async function ensureLegacySQLiteSchema() {
   await ensureChatMemberColumn('isPinned', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false });
   await ensureChatMemberColumn('pinnedAt', { type: DataTypes.DATE, allowNull: true });
   await ensureChatMemberColumn('isArchived', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false });
+  await ensureChatMemberColumn('notificationsMutedUntil', { type: DataTypes.DATE, allowNull: true });
 
   const ensureMessageColumn = async (columnName, definition) => {
     if (!messageTable[columnName]) {

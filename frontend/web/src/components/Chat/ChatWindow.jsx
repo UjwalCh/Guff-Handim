@@ -19,6 +19,8 @@ export default function ChatWindow({ chat, onBack }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [starOnly, setStarOnly] = useState(false);
+  const [showStarVault, setShowStarVault] = useState(false);
+  const [starVaultQuery, setStarVaultQuery] = useState('');
   const [reactTarget, setReactTarget] = useState(null);
   const [showReactPicker, setShowReactPicker] = useState(false);
   const bottomRef = useRef();
@@ -56,6 +58,12 @@ export default function ChatWindow({ chat, onBack }) {
     },
     staleTime: 0,
     refetchOnWindowFocus: false,
+  });
+
+  const starredVaultQ = useQuery({
+    queryKey: ['starred-vault'],
+    queryFn: async () => (await api.get('/messages/starred')).data,
+    enabled: showStarVault,
   });
 
   // Auto-scroll to bottom
@@ -96,6 +104,12 @@ export default function ChatWindow({ chat, onBack }) {
     if (archived) {
       onBack?.();
     }
+  }
+
+  async function handleToggleMute(muted) {
+    const mutedUntil = muted ? new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() : null;
+    const { data } = await api.patch(`/chats/${chat.id}/mute`, { muted, mutedUntil });
+    updateChatMeta(chat.id, { myNotificationsMutedUntil: data.notificationsMutedUntil });
   }
 
   async function handleReact(message, emoji) {
@@ -205,6 +219,7 @@ export default function ChatWindow({ chat, onBack }) {
         onOpenInfo={() => {}}
         onTogglePin={handleTogglePin}
         onToggleArchive={handleToggleArchive}
+        onToggleMute={handleToggleMute}
       />
 
       <div className="px-3 py-2 border-b border-wa-border bg-wa-panel/70 flex items-center gap-2">
@@ -221,6 +236,13 @@ export default function ChatWindow({ chat, onBack }) {
           onClick={() => setStarOnly((prev) => !prev)}
         >
           Starred
+        </button>
+        <button
+          type="button"
+          className={`text-xs px-3 py-1 rounded-full ${showStarVault ? 'bg-wa-green text-white' : 'bg-wa-hover text-wa-text_dim'}`}
+          onClick={() => setShowStarVault((prev) => !prev)}
+        >
+          Star Vault
         </button>
         {showSearch && (
           <input
@@ -331,6 +353,61 @@ export default function ChatWindow({ chat, onBack }) {
             <div className="mt-4 flex justify-end gap-2">
               <button className="px-4 py-2 rounded-xl bg-wa-hover text-wa-text_dim" onClick={() => setForwardTarget(null)}>Cancel</button>
               <button className="px-4 py-2 rounded-xl bg-wa-green text-white disabled:opacity-60" disabled={forwardToChats.length === 0} onClick={submitForward}>Forward</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showStarVault && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-wa-border bg-wa-panel p-4 max-h-[85vh] overflow-auto">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-wa-text font-semibold text-lg">Starred Messages</p>
+              <button className="px-3 py-1 rounded-lg bg-wa-hover text-wa-text_dim" onClick={() => setShowStarVault(false)}>Close</button>
+            </div>
+
+            <input
+              value={starVaultQuery}
+              onChange={(e) => setStarVaultQuery(e.target.value)}
+              placeholder="Search starred messages"
+              className="mt-3 w-full bg-wa-hover rounded-xl px-3 py-2 text-sm text-wa-text placeholder-wa-text_dim outline-none"
+            />
+
+            <div className="mt-4 space-y-2">
+              {(starredVaultQ.data?.messages || [])
+                .filter((m) => {
+                  const q = starVaultQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  const local = msgs.find((x) => x.id === m.id);
+                  const text = (local?.decryptedContent || m.fileName || m.type || '').toLowerCase();
+                  return text.includes(q);
+                })
+                .map((m) => {
+                  const local = msgs.find((x) => x.id === m.id);
+                  const preview = local?.decryptedContent || m.fileName || `[${m.type}]`;
+                  const chatName = chats.find((c) => c.id === m.chatId)?.name || (m.chatId === chat.id ? 'Current chat' : 'Direct chat');
+                  return (
+                    <div key={m.id} className="rounded-xl border border-wa-border bg-wa-hover/70 p-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs text-wa-text_dim">{chatName} · {new Date(m.createdAt).toLocaleString()}</p>
+                        <p className="text-sm text-wa-text truncate mt-1">{preview}</p>
+                      </div>
+                      <button
+                        className="px-2.5 py-1.5 rounded-lg bg-wa-panel text-amber-300"
+                        onClick={async () => {
+                          await api.delete(`/messages/${m.id}/star`);
+                          starredVaultQ.refetch();
+                          updateMessageStars(m.id, []);
+                        }}
+                      >
+                        Unstar
+                      </button>
+                    </div>
+                  );
+                })}
+              {(starredVaultQ.data?.messages || []).length === 0 && (
+                <p className="text-sm text-wa-text_dim">No starred messages yet.</p>
+              )}
             </div>
           </div>
         </div>

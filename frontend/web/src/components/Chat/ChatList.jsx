@@ -170,6 +170,7 @@ export default function ChatList({ onNewChat, onSelectChat }) {
                 <div className="flex justify-between items-baseline">
                   <span className="text-wa-text font-medium text-sm truncate flex items-center gap-1">
                     {chat.myIsPinned && <span title="Pinned">📌</span>}
+                    {chat.myNotificationsMutedUntil && new Date(chat.myNotificationsMutedUntil) > new Date() && <span title="Muted">🔕</span>}
                     {name}
                   </span>
                   {lastTime && (
