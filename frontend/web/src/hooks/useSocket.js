@@ -65,6 +65,22 @@ export function useSocket() {
       updateMessage(chatId, messageId, { isDeleted: true, type: 'deleted', encryptedContent: null });
     });
 
+    socket.on('message-updated', ({ chatId, messageId, updates }) => {
+      const keys = loadKeys();
+      const hydratedUpdates = { ...updates };
+      if (updates?.encryptedContent && keys) {
+        try {
+          const gk = groupKeysRef.current[chatId];
+          if (gk) {
+            hydratedUpdates.decryptedContent = decryptGroup(updates.encryptedContent, gk);
+          }
+        } catch (_error) {
+          hydratedUpdates.decryptedContent = '[Encrypted]';
+        }
+      }
+      updateMessage(chatId, messageId, hydratedUpdates);
+    });
+
     socket.on('reaction-update', ({ messageId, reactions }) => {
       updateMessageReactions(messageId, reactions);
     });

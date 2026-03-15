@@ -91,9 +91,13 @@ async function ensureLegacySQLiteSchema() {
 
   const queryInterface = sequelize.getQueryInterface();
   let userTable;
+  let chatMemberTable;
+  let messageTable;
 
   try {
     userTable = await queryInterface.describeTable('Users');
+    chatMemberTable = await queryInterface.describeTable('ChatMembers');
+    messageTable = await queryInterface.describeTable('Messages');
   } catch (_error) {
     return;
   }
@@ -111,6 +115,25 @@ async function ensureLegacySQLiteSchema() {
   await ensureColumn('isSuspended', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false });
   await ensureColumn('suspendedReason', { type: DataTypes.STRING(255), allowNull: true });
   await ensureColumn('suspendedUntil', { type: DataTypes.DATE, allowNull: true });
+
+  const ensureChatMemberColumn = async (columnName, definition) => {
+    if (!chatMemberTable[columnName]) {
+      await queryInterface.addColumn('ChatMembers', columnName, definition);
+    }
+  };
+
+  await ensureChatMemberColumn('isPinned', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false });
+  await ensureChatMemberColumn('pinnedAt', { type: DataTypes.DATE, allowNull: true });
+  await ensureChatMemberColumn('isArchived', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false });
+
+  const ensureMessageColumn = async (columnName, definition) => {
+    if (!messageTable[columnName]) {
+      await queryInterface.addColumn('Messages', columnName, definition);
+    }
+  };
+
+  await ensureMessageColumn('isEdited', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false });
+  await ensureMessageColumn('editedAt', { type: DataTypes.DATE, allowNull: true });
 
   await sequelize.query('CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON Users (email)');
 }

@@ -1,6 +1,14 @@
 const { Message, MessageStatus, MessageReaction, Chat, ChatMember, User } = require('../models');
 const { getIO } = require('../socket');
 
+const MESSAGE_EDIT_WINDOW_MINUTES = parseInt(process.env.MESSAGE_EDIT_WINDOW_MINUTES || '15', 10);
+const MESSAGE_UNSEND_WINDOW_MINUTES = parseInt(process.env.MESSAGE_UNSEND_WINDOW_MINUTES || '15', 10);
+
+function withinWindow(createdAt, windowMinutes) {
+  const maxAgeMs = Math.max(windowMinutes, 1) * 60 * 1000;
+  return (Date.now() - new Date(createdAt).getTime()) <= maxAgeMs;
+}
+
 async function sendMessage(req, res, next) {
   try {
     const { chatId } = req.params;
@@ -64,6 +72,10 @@ async function deleteMessage(req, res, next) {
     const message = await Message.findByPk(req.params.id);
     if (!message) return res.status(404).json({ error: 'Message not found' });
     if (message.senderId !== req.user.id) return res.status(403).json({ error: 'Not your message' });
+    if (message.isDeleted) return res.status(400).json({ error: 'Message already removed' });
+    if (!withinWindow(message.createdAt, MESSAGE_UNSEND_WINDOW_MINUTES)) {
+      return res.status(403).json({ error: `Messages can only be unsent within ${MESSAGE_UNSEND_WINDOW_MINUTES} minutes` });
+    }
 
     await message.update({ isDeleted: true, encryptedContent: null, type: 'deleted', fileUrl: null });
 
@@ -71,6 +83,44 @@ async function deleteMessage(req, res, next) {
     io.to(`chat:${message.chatId}`).emit('message-deleted', { messageId: message.id, chatId: message.chatId });
 
     res.json({ message: 'Message deleted' });
+  } catch (err) { next(err); }
+}
+
+async function editMessage(req, res, next) {
+  try {
+    const message = await Message.findByPk(req.params.id, {
+      include: [{ model: User, as: 'sender', attributes: ['id', 'name', 'avatar'] }],
+    });
+
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (message.senderId !== req.user.id) return res.status(403).json({ error: 'Not your message' });
+    if (message.isDeleted) return res.status(400).json({ error: 'Cannot edit deleted message' });
+    if (message.type !== 'text') return res.status(400).json({ error: 'Only text messages can be edited' });
+    if (!withinWindow(message.createdAt, MESSAGE_EDIT_WINDOW_MINUTES)) {
+      return res.status(403).json({ error: `Messages can only be edited within ${MESSAGE_EDIT_WINDOW_MINUTES} minutes` });
+    }
+
+    const encryptedContent = req.body.encryptedContent;
+    if (!encryptedContent) return res.status(400).json({ error: 'encryptedContent is required' });
+
+    await message.update({
+      encryptedContent,
+      isEdited: true,
+      editedAt: new Date(),
+    });
+
+    const io = getIO();
+    io.to(`chat:${message.chatId}`).emit('message-updated', {
+      chatId: message.chatId,
+      messageId: message.id,
+      updates: {
+        encryptedContent: message.encryptedContent,
+        isEdited: true,
+        editedAt: message.editedAt,
+      },
+    });
+
+    res.json({ message });
   } catch (err) { next(err); }
 }
 
@@ -132,4 +182,4 @@ async function markRead(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { sendMessage, deleteMessage, addReaction, removeReaction, markRead };
+module.exports = { sendMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead };

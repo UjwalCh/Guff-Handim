@@ -53,11 +53,13 @@ export default function ChatPage() {
 
   // Sync URL param → active chat
   useEffect(() => {
-    if (paramId && chats.length > 0) {
-      const found = chats.find(c => c.id === paramId);
-      if (found) { storeSetActive(found.id); setActiveChat(found); }
+    if (!paramId || chats.length === 0) return;
+    const found = chats.find(c => c.id === paramId);
+    if (found) {
+      storeSetActive(found.id);
+      setActiveChat(found);
     }
-  }, [paramId, chats.length]);
+  }, [paramId, chats, storeSetActive]);
 
   function handleSelectChat(chat) {
     setActiveChat(chat);

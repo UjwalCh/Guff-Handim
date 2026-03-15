@@ -45,6 +45,14 @@ export default function ChatList({ onNewChat, onSelectChat }) {
         return false;
       }
 
+      if (filter === 'archived' && !chat.myIsArchived) {
+        return false;
+      }
+
+      if (filter !== 'archived' && chat.myIsArchived) {
+        return false;
+      }
+
       if (!q) {
         return true;
       }
@@ -95,6 +103,16 @@ export default function ChatList({ onNewChat, onSelectChat }) {
             )}
           >
             Unread
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('archived')}
+            className={clsx(
+              'text-xs px-3 py-1 rounded-full transition',
+              filter === 'archived' ? 'bg-wa-green text-white' : 'bg-wa-hover text-wa-text_dim hover:text-wa-text'
+            )}
+          >
+            Archived
           </button>
         </div>
         <div className="flex items-center bg-wa-hover rounded-lg px-3 py-1.5 gap-2">
@@ -150,7 +168,10 @@ export default function ChatList({ onNewChat, onSelectChat }) {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-wa-text font-medium text-sm truncate">{name}</span>
+                  <span className="text-wa-text font-medium text-sm truncate flex items-center gap-1">
+                    {chat.myIsPinned && <span title="Pinned">📌</span>}
+                    {name}
+                  </span>
                   {lastTime && (
                     <span className={clsx('text-xs shrink-0 ml-2', count > 0 ? 'text-wa-green' : 'text-wa-text_dim')}>
                       {formatChatTime(lastTime)}

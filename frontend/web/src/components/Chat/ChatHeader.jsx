@@ -4,7 +4,7 @@ import { useCallStore } from '../../store/callStore';
 import { useWebRTC } from '../../hooks/useWebRTC';
 import { formatLastSeen, getInitials } from '../../utils/helpers';
 
-export default function ChatHeader({ chat, onBack, onOpenInfo }) {
+export default function ChatHeader({ chat, onBack, onOpenInfo, onTogglePin, onToggleArchive }) {
   const myId = useAuthStore(s => s.user?.id);
   const typingUsers = useChatStore(s => s.typingUsers[chat?.id]);
   const { startCall, hangUp } = useWebRTC();
@@ -70,6 +70,20 @@ export default function ChatHeader({ chat, onBack, onOpenInfo }) {
 
       {/* Action buttons */}
       <div className="flex items-center gap-1">
+        <button
+          onClick={() => onTogglePin?.(!chat.myIsPinned)}
+          className="text-wa-icon hover:text-wa-text transition p-2 rounded-full hover:bg-wa-hover"
+          title={chat.myIsPinned ? 'Unpin chat' : 'Pin chat'}
+        >
+          {chat.myIsPinned ? '📌' : '📍'}
+        </button>
+        <button
+          onClick={() => onToggleArchive?.(!chat.myIsArchived)}
+          className="text-wa-icon hover:text-wa-text transition p-2 rounded-full hover:bg-wa-hover"
+          title={chat.myIsArchived ? 'Unarchive chat' : 'Archive chat'}
+        >
+          {chat.myIsArchived ? '📂' : '🗄️'}
+        </button>
         {!chat.isGroup && (
           <>
             <button

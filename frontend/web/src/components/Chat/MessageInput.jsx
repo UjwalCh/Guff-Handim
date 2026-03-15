@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import EmojiPicker from 'emoji-picker-react';
 import api from '../../utils/api';
 import { getSocket } from '../../hooks/useSocket';
@@ -6,7 +6,7 @@ import { encryptDirect, encryptGroup, loadKeys } from '../../utils/encryption';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 
-export default function MessageInput({ chat, replyTo, onClearReply }) {
+export default function MessageInput({ chat, replyTo, editTarget, onEdit, onCancelEdit, onClearReply }) {
   const myId = useAuthStore(s => s.user?.id);
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -17,6 +17,12 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
   const typingTimerRef = useRef(null);
   const socket = getSocket();
   const groupKeys = useChatStore(s => s.groupKeys);
+
+  useEffect(() => {
+    if (editTarget?.id) {
+      setText(editTarget.decryptedContent || '');
+    }
+  }, [editTarget?.id]);
 
   function encryptMessage(plaintext) {
     const keys = loadKeys();
@@ -53,6 +59,18 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
     if (!trimmed) return;
 
     const encryptedContent = encryptMessage(trimmed);
+    if (!encryptedContent) return;
+
+    if (editTarget) {
+      try {
+        await onEdit?.(editTarget, encryptedContent);
+        setText('');
+      } catch (err) {
+        console.error('Edit failed:', err);
+      }
+      return;
+    }
+
     setText('');
     setShowEmoji(false);
     socket?.emit('typing', { chatId: chat.id, isTyping: false });
@@ -130,6 +148,16 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
             <p className="text-wa-text_dim text-xs truncate">{replyTo.decryptedContent || '📎 Media'}</p>
           </div>
           <button onClick={onClearReply} className="text-wa-text_dim hover:text-wa-text">✕</button>
+        </div>
+      )}
+
+      {editTarget && (
+        <div className="flex items-center bg-wa-hover rounded-lg px-3 py-2 mb-2 gap-2">
+          <div className="flex-1 border-l-2 border-amber-400 pl-2">
+            <p className="text-amber-300 text-xs font-medium">Editing message</p>
+            <p className="text-wa-text_dim text-xs truncate">{editTarget.decryptedContent || '[Encrypted message]'}</p>
+          </div>
+          <button onClick={() => { onCancelEdit?.(); setText(''); }} className="text-wa-text_dim hover:text-wa-text">✕</button>
         </div>
       )}
 
@@ -212,7 +240,7 @@ export default function MessageInput({ chat, replyTo, onClearReply }) {
           }}
           disabled={uploading}
           className="w-10 h-10 bg-wa-green rounded-full flex items-center justify-center hover:bg-opacity-90 transition disabled:opacity-50"
-          title={text.trim() ? 'Send' : 'Attach media'}
+          title={text.trim() ? (editTarget ? 'Save edit' : 'Send') : 'Attach media'}
         >
           {uploading ? (
             <svg className="animate-spin w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">

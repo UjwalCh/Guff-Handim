@@ -8,7 +8,7 @@ export const useChatStore = create((set, get) => ({
   typingUsers: {},      // { [chatId]: Set of userIds }
   unreadCounts: {},     // { [chatId]: number }
 
-  setChats: (chats) => set({ chats }),
+  setChats: (chats) => set({ chats: sortChats(chats) }),
 
   upsertChat: (chat) => {
     set(s => {
@@ -16,9 +16,16 @@ export const useChatStore = create((set, get) => ({
       if (existing >= 0) {
         const updated = [...s.chats];
         updated[existing] = { ...updated[existing], ...chat };
-        return { chats: updated };
+        return { chats: sortChats(updated) };
       }
-      return { chats: [chat, ...s.chats] };
+      return { chats: sortChats([chat, ...s.chats]) };
+    });
+  },
+
+  updateChatMeta: (chatId, updates) => {
+    set((s) => {
+      const chats = s.chats.map((chat) => (chat.id === chatId ? { ...chat, ...updates } : chat));
+      return { chats: sortChats(chats) };
     });
   },
 
@@ -48,7 +55,7 @@ export const useChatStore = create((set, get) => ({
       const unread = s.activeChatId !== chatId
         ? { ...s.unreadCounts, [chatId]: (s.unreadCounts[chatId] || 0) + 1 }
         : s.unreadCounts;
-      return { messages: { ...s.messages, [chatId]: updated }, chats, unreadCounts: unread };
+      return { messages: { ...s.messages, [chatId]: updated }, chats: sortChats(chats), unreadCounts: unread };
     });
   },
 
@@ -95,3 +102,25 @@ export const useChatStore = create((set, get) => ({
     }));
   },
 }));
+
+function sortChats(chats) {
+  return [...chats].sort((a, b) => {
+    const aArchived = Boolean(a.myIsArchived);
+    const bArchived = Boolean(b.myIsArchived);
+    if (aArchived !== bArchived) return aArchived ? 1 : -1;
+
+    const aPinned = Boolean(a.myIsPinned);
+    const bPinned = Boolean(b.myIsPinned);
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+
+    if (aPinned && bPinned) {
+      const aPinnedAt = a.myPinnedAt ? new Date(a.myPinnedAt).getTime() : 0;
+      const bPinnedAt = b.myPinnedAt ? new Date(b.myPinnedAt).getTime() : 0;
+      if (aPinnedAt !== bPinnedAt) return bPinnedAt - aPinnedAt;
+    }
+
+    const aLast = a.messages?.[0]?.createdAt ? new Date(a.messages[0].createdAt).getTime() : 0;
+    const bLast = b.messages?.[0]?.createdAt ? new Date(b.messages[0].createdAt).getTime() : 0;
+    return bLast - aLast;
+  });
+}

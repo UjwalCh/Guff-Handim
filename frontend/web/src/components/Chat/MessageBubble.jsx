@@ -1,14 +1,12 @@
-import { useState, useRef } from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { useChatStore } from '../../store/chatStore';
 import { formatMessageTime, clsx, getInitials } from '../../utils/helpers';
 import MediaViewer from '../Media/MediaViewer';
 import { toAbsoluteAssetUrl } from '../../utils/runtimeConfig';
 
-export default function MessageBubble({ message, isGroup, onReply, onDelete, onReact }) {
+export default function MessageBubble({ message, isGroup, onReply, onDelete, onEdit, onReact }) {
   const myId = useAuthStore(s => s.user?.id);
   const isMine = message.senderId === myId;
-  const [showActions, setShowActions] = useState(false);
+  const withinModifyWindow = Date.now() - new Date(message.createdAt).getTime() <= 15 * 60 * 1000;
 
   const mediaFileUrl = toAbsoluteAssetUrl(message.fileUrl);
   const mediaThumbnailUrl = toAbsoluteAssetUrl(message.thumbnailUrl);
@@ -77,7 +75,10 @@ export default function MessageBubble({ message, isGroup, onReply, onDelete, onR
           )}
 
           {message.type === 'audio' && mediaFileUrl && (
-            <audio controls src={mediaFileUrl} className="max-w-full" />
+            <div className="rounded-xl border border-wa-border bg-wa-panel px-3 py-2">
+              <p className="text-[11px] text-wa-text_dim mb-1">Voice note</p>
+              <audio controls src={mediaFileUrl} className="max-w-full h-10" />
+            </div>
           )}
 
           {message.type === 'file' && mediaFileUrl && (
@@ -99,6 +100,7 @@ export default function MessageBubble({ message, isGroup, onReply, onDelete, onR
           {/* Timestamp + read receipt */}
           <div className={clsx('flex items-center gap-1 mt-1', isMine ? 'justify-end' : 'justify-start')}>
             <span className="text-wa-text_dim text-[10px]">{formatMessageTime(message.createdAt)}</span>
+            {message.isEdited && <span className="text-wa-text_dim text-[10px]">edited</span>}
             {isMine && (
               <span className="text-wa-text_dim text-[10px]">
                 {message.readBy ? '✓✓' : '✓'}
@@ -133,7 +135,13 @@ export default function MessageBubble({ message, isGroup, onReply, onDelete, onR
             className="bg-wa-panel text-wa-icon hover:text-wa-text rounded-full p-1.5 shadow text-xs">
             ↩
           </button>
-          {isMine && (
+          {isMine && withinModifyWindow && message.type === 'text' && !message.isDeleted && (
+            <button onClick={() => onEdit && onEdit(message)} title="Edit"
+              className="bg-wa-panel text-wa-icon hover:text-wa-text rounded-full p-1.5 shadow text-xs">
+              ✎
+            </button>
+          )}
+          {isMine && withinModifyWindow && (
             <button onClick={() => onDelete && onDelete(message.id)} title="Delete"
               className="bg-wa-panel text-red-400 hover:text-red-500 rounded-full p-1.5 shadow text-xs">
               🗑

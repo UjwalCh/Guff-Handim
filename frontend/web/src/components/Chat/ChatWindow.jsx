@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../utils/api';
 import { useChatStore } from '../../store/chatStore';
@@ -9,14 +9,16 @@ import ChatHeader from './ChatHeader';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
 import EmojiPicker from 'emoji-picker-react';
+import { toAbsoluteAssetUrl } from '../../utils/runtimeConfig';
 
 export default function ChatWindow({ chat, onBack }) {
   const [replyTo, setReplyTo] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const [reactTarget, setReactTarget] = useState(null);
   const [showReactPicker, setShowReactPicker] = useState(false);
   const bottomRef = useRef();
   const myId = useAuthStore(s => s.user?.id);
-  const { setMessages, messages: allMsgs, groupKeys, updateMessage } = useChatStore();
+  const { setMessages, messages: allMsgs, groupKeys, updateMessage, updateChatMeta } = useChatStore();
   const msgs = allMsgs[chat?.id] || [];
   const gk = groupKeys[chat?.id];
 
@@ -66,6 +68,28 @@ export default function ChatWindow({ chat, onBack }) {
 
   async function handleDelete(messageId) {
     await api.delete(`/messages/${messageId}`);
+    if (editTarget?.id === messageId) setEditTarget(null);
+  }
+
+  async function handleEdit(message, nextEncryptedContent) {
+    await api.patch(`/messages/${message.id}`, { encryptedContent: nextEncryptedContent });
+    setEditTarget(null);
+  }
+
+  async function handleTogglePin(pinned) {
+    await api.patch(`/chats/${chat.id}/pin`, { pinned });
+    updateChatMeta(chat.id, {
+      myIsPinned: pinned,
+      myPinnedAt: pinned ? new Date().toISOString() : null,
+    });
+  }
+
+  async function handleToggleArchive(archived) {
+    await api.patch(`/chats/${chat.id}/archive`, { archived });
+    updateChatMeta(chat.id, { myIsArchived: archived });
+    if (archived) {
+      onBack?.();
+    }
   }
 
   async function handleReact(message, emoji) {
@@ -85,10 +109,47 @@ export default function ChatWindow({ chat, onBack }) {
   }
 
   const grouped = groupMessagesByDate(msgs);
+  const recentMedia = useMemo(
+    () => msgs.filter((m) => (m.type === 'image' || m.type === 'video') && m.fileUrl).slice(-12).reverse(),
+    [msgs]
+  );
 
   return (
     <div className="flex flex-col h-full">
-      <ChatHeader chat={chat} onBack={onBack} onOpenInfo={() => {}} />
+      <ChatHeader
+        chat={chat}
+        onBack={onBack}
+        onOpenInfo={() => {}}
+        onTogglePin={handleTogglePin}
+        onToggleArchive={handleToggleArchive}
+      />
+
+      {recentMedia.length > 0 && (
+        <div className="px-3 py-2 border-b border-wa-border bg-wa-panel/80">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <span className="text-[11px] uppercase tracking-[0.14em] text-wa-text_dim shrink-0">Recent media</span>
+            {recentMedia.map((media) => (
+              <a
+                key={media.id}
+                href={toAbsoluteAssetUrl(media.fileUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-wa-border ui-pop"
+                title={media.type === 'video' ? 'Open video' : 'Open image'}
+              >
+                <img
+                  src={toAbsoluteAssetUrl(media.thumbnailUrl || media.fileUrl)}
+                  alt="media"
+                  className="w-full h-full object-cover"
+                />
+                {media.type === 'video' && (
+                  <span className="absolute inset-0 grid place-items-center bg-black/25 text-white text-xs">▶</span>
+                )}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Messages area */}
       <div
@@ -114,6 +175,7 @@ export default function ChatWindow({ chat, onBack }) {
               isGroup={chat?.isGroup}
               onReply={setReplyTo}
               onDelete={handleDelete}
+              onEdit={() => setEditTarget(item.message)}
               onReact={handleReact}
             />
           )
@@ -131,6 +193,9 @@ export default function ChatWindow({ chat, onBack }) {
       <MessageInput
         chat={chat}
         replyTo={replyTo}
+        editTarget={editTarget}
+        onEdit={handleEdit}
+        onCancelEdit={() => setEditTarget(null)}
         onClearReply={() => setReplyTo(null)}
       />
     </div>

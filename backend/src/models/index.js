@@ -76,6 +76,9 @@ const ChatMember = sequelize.define('ChatMember', {
   userId:            { type: DataTypes.UUID, primaryKey: true },
   role:              { type: DataTypes.ENUM('member', 'admin'), defaultValue: 'member' },
   mutedUntil:        { type: DataTypes.DATE, allowNull: true },
+  isPinned:          { type: DataTypes.BOOLEAN, defaultValue: false },
+  pinnedAt:          { type: DataTypes.DATE, allowNull: true },
+  isArchived:        { type: DataTypes.BOOLEAN, defaultValue: false },
   isActive:          { type: DataTypes.BOOLEAN, defaultValue: true },
   joinedAt:          { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   // Group E2EE: group symmetric key encrypted with this member's public key (stored as JSON {nonce, ciphertext})
@@ -97,6 +100,8 @@ const Message = sequelize.define('Message', {
   thumbnailUrl:     { type: DataTypes.STRING(500), allowNull: true },
   replyToId:        { type: DataTypes.UUID, allowNull: true },
   isForwarded:      { type: DataTypes.BOOLEAN, defaultValue: false },
+  isEdited:         { type: DataTypes.BOOLEAN, defaultValue: false },
+  editedAt:         { type: DataTypes.DATE, allowNull: true },
   isDeleted:        { type: DataTypes.BOOLEAN, defaultValue: false },
   disappearsAt:     { type: DataTypes.DATE, allowNull: true },
 });

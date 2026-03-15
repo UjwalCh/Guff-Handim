@@ -34,9 +34,63 @@ async function getMyChats(req, res, next) {
         ...m.chat.toJSON(),
         myRole: m.role,
         myEncryptedGroupKey: m.encryptedGroupKey,
+        myIsPinned: Boolean(m.isPinned),
+        myPinnedAt: m.pinnedAt,
+        myIsArchived: Boolean(m.isArchived),
       }));
 
+    chats.sort((a, b) => {
+      if (a.myIsPinned !== b.myIsPinned) {
+        return a.myIsPinned ? -1 : 1;
+      }
+
+      if (a.myIsPinned && b.myIsPinned) {
+        const aPinnedAt = a.myPinnedAt ? new Date(a.myPinnedAt).getTime() : 0;
+        const bPinnedAt = b.myPinnedAt ? new Date(b.myPinnedAt).getTime() : 0;
+        if (aPinnedAt !== bPinnedAt) {
+          return bPinnedAt - aPinnedAt;
+        }
+      }
+
+      const aLast = a.messages?.[0]?.createdAt ? new Date(a.messages[0].createdAt).getTime() : 0;
+      const bLast = b.messages?.[0]?.createdAt ? new Date(b.messages[0].createdAt).getTime() : 0;
+      return bLast - aLast;
+    });
+
     res.json({ chats });
+  } catch (err) { next(err); }
+}
+
+async function setPinnedState(req, res, next) {
+  try {
+    const membership = await ChatMember.findOne({
+      where: { chatId: req.params.id, userId: req.user.id, isActive: true },
+    });
+
+    if (!membership) return res.status(403).json({ error: 'Not a member of this chat' });
+
+    const shouldPin = req.body?.pinned !== false;
+    await membership.update({
+      isPinned: shouldPin,
+      pinnedAt: shouldPin ? new Date() : null,
+    });
+
+    res.json({ message: shouldPin ? 'Chat pinned' : 'Chat unpinned', isPinned: shouldPin, pinnedAt: membership.pinnedAt });
+  } catch (err) { next(err); }
+}
+
+async function setArchivedState(req, res, next) {
+  try {
+    const membership = await ChatMember.findOne({
+      where: { chatId: req.params.id, userId: req.user.id, isActive: true },
+    });
+
+    if (!membership) return res.status(403).json({ error: 'Not a member of this chat' });
+
+    const shouldArchive = req.body?.archived !== false;
+    await membership.update({ isArchived: shouldArchive });
+
+    res.json({ message: shouldArchive ? 'Chat archived' : 'Chat restored', isArchived: shouldArchive });
   } catch (err) { next(err); }
 }
 
@@ -150,4 +204,12 @@ async function updateChatSettings(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getMyChats, createOrGetDirectChat, getChatById, getChatMessages, updateChatSettings };
+module.exports = {
+  getMyChats,
+  createOrGetDirectChat,
+  getChatById,
+  getChatMessages,
+  updateChatSettings,
+  setPinnedState,
+  setArchivedState,
+};
