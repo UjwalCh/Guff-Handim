@@ -1,7 +1,15 @@
 const path = require('path');
-const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
+
+let sharp;
+
+function getSharp() {
+  if (!sharp) {
+    sharp = require('sharp');
+  }
+  return sharp;
+}
 
 async function uploadFile(req, res, next) {
   try {
@@ -15,9 +23,10 @@ async function uploadFile(req, res, next) {
 
     // Generate thumbnail for images
     if (file.mimetype.startsWith('image/')) {
+      const imageProcessor = getSharp();
       const thumbName = `thumb_${uuidv4()}.jpg`;
       const thumbPath = path.join(path.dirname(file.path), thumbName);
-      await sharp(file.path)
+      await imageProcessor(file.path)
         .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 75 })
         .toFile(thumbPath);
@@ -38,11 +47,12 @@ async function uploadAvatar(req, res, next) {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
     const { file } = req;
+    const imageProcessor = getSharp();
     const outName = `${uuidv4()}.jpg`;
     const outPath = path.join(path.dirname(file.path), outName);
 
     // Resize & normalize avatar
-    await sharp(file.path)
+    await imageProcessor(file.path)
       .resize(256, 256, { fit: 'cover' })
       .jpeg({ quality: 85 })
       .toFile(outPath);
