@@ -6,7 +6,7 @@ This setup keeps costs at $0 on free tiers.
 
 - Frontend: Vercel (free)
 - Backend API + Socket.IO: Render web service (free)
-- Database: SQLite on Render disk (or switch to managed DB if disk is unavailable on your plan)
+- Database: Free managed Postgres (recommended for persistent data)
 
 ## 1. Deploy Backend on Render
 
@@ -25,9 +25,12 @@ This setup keeps costs at $0 on free tiers.
    - `TWILIO_PHONE_NUMBER`
 5. After first deploy, copy backend URL, e.g. `https://chatapp-backend.onrender.com`.
 
-If Render blocks persistent disks on your free tier, use a free managed DB and set:
-- `DB_DIALECT=mysql`
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+For persistent accounts/messages/admin data, use free Postgres (Neon/Supabase/Render Postgres) and set:
+- `DB_DIALECT=postgres`
+- `DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DBNAME`
+- `DB_SSL=true`
+
+If your provider does not require SSL, set `DB_SSL=false`.
 
 ## 2. Deploy Frontend on Vercel
 
@@ -61,4 +64,5 @@ Example:
 ## 5. Notes
 
 - Free Render services sleep when idle; first request may take ~30-60s.
+- SQLite with `/tmp` storage is ephemeral and can lose data after restarts/deploys.
 - For production reliability and media heavy usage, move to paid plans.

@@ -34,6 +34,8 @@ export default function AdminPanelPage() {
   const [userQuery, setUserQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [tabFilter, setTabFilter] = useState('');
+  const [userActionMessage, setUserActionMessage] = useState('');
+  const [userActionError, setUserActionError] = useState('');
   const [theme, setTheme] = useState(() => localStorage.getItem('gh-admin-theme') || 'light');
   const role = admin?.role;
   const isLegacyAdmin = role === 'admin';
@@ -146,18 +148,55 @@ export default function AdminPanelPage() {
 
   const suspendMutation = useMutation({
     mutationFn: ({ id, reason }) => adminApi.patch(`/admin/users/${id}/suspend`, { reason }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => {
+      setUserActionError('');
+      setUserActionMessage('User suspended successfully.');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (err) => setUserActionError(getApiError(err, 'Unable to suspend user')),
   });
   const restoreMutation = useMutation({
     mutationFn: (id) => adminApi.patch(`/admin/users/${id}/restore`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => {
+      setUserActionError('');
+      setUserActionMessage('User restored successfully.');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (err) => setUserActionError(getApiError(err, 'Unable to restore user')),
   });
   const verifyMutation = useMutation({
     mutationFn: (id) => adminApi.patch(`/admin/users/${id}/verify`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => {
+      setUserActionError('');
+      setUserActionMessage('User verified successfully.');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (err) => setUserActionError(getApiError(err, 'Unable to verify user')),
   });
   const pushResetMutation = useMutation({
     mutationFn: (id) => adminApi.post(`/admin/users/${id}/push-reset-password`),
+    onSuccess: () => {
+      setUserActionError('');
+      setUserActionMessage('Reset OTP pushed and user sessions revoked.');
+    },
+    onError: (err) => setUserActionError(getApiError(err, 'Unable to push reset OTP')),
+  });
+  const tempResetMutation = useMutation({
+    mutationFn: (id) => adminApi.post(`/admin/users/${id}/reset-password-temp`),
+    onSuccess: ({ data }) => {
+      setUserActionError('');
+      setUserActionMessage(`Temporary password set: ${data.temporaryPassword}`);
+    },
+    onError: (err) => setUserActionError(getApiError(err, 'Unable to set temporary password')),
+  });
+  const forceLogoutMutation = useMutation({
+    mutationFn: (id) => adminApi.post(`/admin/users/${id}/force-logout`),
+    onSuccess: () => {
+      setUserActionError('');
+      setUserActionMessage('User sessions revoked successfully.');
+      queryClient.invalidateQueries({ queryKey: ['admin-user-details'] });
+    },
+    onError: (err) => setUserActionError(getApiError(err, 'Unable to force logout user')),
   });
   const reportMutation = useMutation({
     mutationFn: ({ id, status }) => adminApi.patch(`/admin/reports/${id}/resolve`, { status }),
@@ -387,6 +426,7 @@ export default function AdminPanelPage() {
                 <AdminAccountsPanel
                   currentAdmin={admin}
                   admins={adminAccountsQ.data?.admins || []}
+                  users={usersQ.data?.users || []}
                   onCreate={(payload) => createAdminMutation.mutateAsync(payload)}
                   onUpdate={(id, payload) => updateAdminMutation.mutateAsync({ id, payload })}
                   onUpdateSelf={(payload) => updateMyCredentialsMutation.mutateAsync(payload)}
@@ -424,6 +464,21 @@ export default function AdminPanelPage() {
               {activeTab === 'Users' && (
                 <section className="space-y-4">
                   <input value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="Search users by name, email, or phone" className="w-full md:w-96 rounded-2xl border border-slate-300 px-4 py-3" />
+                  {usersQ.isError && (
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {getApiError(usersQ.error, 'Unable to load users. Please re-login in admin panel.')}
+                    </div>
+                  )}
+                  {userActionMessage && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                      {userActionMessage}
+                    </div>
+                  )}
+                  {userActionError && (
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {userActionError}
+                    </div>
+                  )}
                   {selectedUserId && (
                     <UserDetailsDrawer
                       details={userDetailsQ.data}
@@ -465,7 +520,8 @@ export default function AdminPanelPage() {
                                 )}
                                 {isSupportOrSuper && <ActionButton tone="sky" onClick={() => verifyMutation.mutate(user.id)}>Verify</ActionButton>}
                                 {isSupportOrSuper && <ActionButton tone="slate" onClick={() => pushResetMutation.mutate(user.id)}>Push Reset OTP</ActionButton>}
-                                {isSupportOrSuper && <ActionButton tone="rose" onClick={() => adminApi.post(`/admin/users/${user.id}/force-logout`)}>Force Logout</ActionButton>}
+                                {isSupportOrSuper && <ActionButton tone="amber" onClick={() => tempResetMutation.mutate(user.id)}>Set Temp Password</ActionButton>}
+                                {isSupportOrSuper && <ActionButton tone="rose" onClick={() => forceLogoutMutation.mutate(user.id)}>Force Logout</ActionButton>}
                                 {canSecurityControls && user.phone && (
                                   <ActionButton tone="amber" onClick={() => createBanMutation.mutate({ type: 'phone', value: user.phone, reason: 'Blocked from user panel' })}>
                                     Block Phone
@@ -474,6 +530,13 @@ export default function AdminPanelPage() {
                               </td>
                             </tr>
                           ))}
+                          {(usersQ.data?.users || []).length === 0 && !usersQ.isLoading && (
+                            <tr>
+                              <td colSpan={4} className="py-6 text-sm text-slate-500">
+                                No users found. If users should exist, verify backend database persistence and admin session validity.
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -907,6 +970,7 @@ function PrivacyPanel({ users, onExport, onDelete }) {
           <button disabled={!userId} onClick={() => onExport(userId)} className="rounded-2xl bg-sky-600 text-white px-4 py-3 disabled:opacity-60">Export data</button>
           <button disabled={!userId} onClick={() => window.confirm('Delete all user data?') && onDelete(userId)} className="rounded-2xl bg-rose-600 text-white px-4 py-3 disabled:opacity-60">Delete data</button>
         </div>
+        {users.length === 0 && <p className="text-sm text-slate-500">No users available to select. Check admin session and backend database persistence.</p>}
       </div>
     </Card>
   );
@@ -994,8 +1058,9 @@ function ActivityFeedPanel({ items }) {
   );
 }
 
-function AdminAccountsPanel({ currentAdmin, admins, onCreate, onUpdate, onUpdateSelf }) {
+function AdminAccountsPanel({ currentAdmin, admins, users, onCreate, onUpdate, onUpdateSelf }) {
   const [createForm, setCreateForm] = useState({ username: '', phone: '', password: '', role: 'moderator', require2FA: true });
+  const [promoteForm, setPromoteForm] = useState({ userId: '', role: 'moderator', require2FA: true });
   const [selfForm, setSelfForm] = useState({ currentPassword: '', username: currentAdmin?.username || '', phone: currentAdmin?.phone || '', newPassword: '' });
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -1010,6 +1075,34 @@ function AdminAccountsPanel({ currentAdmin, admins, onCreate, onUpdate, onUpdate
       setCreateForm({ username: '', phone: '', password: '', role: 'moderator', require2FA: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Unable to create admin account');
+    }
+  }
+
+  async function submitPromote(e) {
+    e.preventDefault();
+    setError('');
+    setStatus('');
+
+    if (!promoteForm.userId) {
+      setError('Please select a user to promote');
+      return;
+    }
+
+    try {
+      const response = await onCreate({
+        existingUserId: promoteForm.userId,
+        role: promoteForm.role,
+        require2FA: promoteForm.require2FA,
+      });
+      const generatedPassword = response?.data?.generatedPassword;
+      setStatus(
+        generatedPassword
+          ? `User promoted to admin. Temporary password: ${generatedPassword}`
+          : 'User promoted to admin successfully.'
+      );
+      setPromoteForm({ userId: '', role: 'moderator', require2FA: true });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Unable to promote user to admin');
     }
   }
 
@@ -1050,7 +1143,7 @@ function AdminAccountsPanel({ currentAdmin, admins, onCreate, onUpdate, onUpdate
         </div>
       )}
 
-      <div className="grid xl:grid-cols-[1fr_1fr] gap-5">
+      <div className="grid xl:grid-cols-3 gap-5">
         <Card title="Create Admin" subtitle="Add another admin account for your team.">
           <form onSubmit={submitCreate} className="space-y-3">
             <Input label="Username" value={createForm.username} onChange={(v) => setCreateForm((prev) => ({ ...prev, username: v }))} />
@@ -1070,6 +1163,34 @@ function AdminAccountsPanel({ currentAdmin, admins, onCreate, onUpdate, onUpdate
               Require OTP 2FA on login
             </label>
             <button type="submit" className="rounded-2xl bg-slate-950 text-white px-4 py-3">Create admin account</button>
+          </form>
+        </Card>
+
+        <Card title="Promote Existing User" subtitle="Make an existing app user an admin without manually retyping phone/password.">
+          <form onSubmit={submitPromote} className="space-y-3">
+            <div>
+              <label className="text-sm text-slate-600">Select user</label>
+              <select className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3" value={promoteForm.userId} onChange={(e) => setPromoteForm((prev) => ({ ...prev, userId: e.target.value }))}>
+                <option value="">Choose user</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>{user.name || 'Unnamed'} · {user.phone || 'No phone'}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Role</label>
+              <select className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3" value={promoteForm.role} onChange={(e) => setPromoteForm((prev) => ({ ...prev, role: e.target.value }))}>
+                <option value="moderator">Moderator</option>
+                <option value="support">Support Staff</option>
+                <option value="security">Security Admin</option>
+                <option value="super_admin">Super Admin</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={promoteForm.require2FA} onChange={(e) => setPromoteForm((prev) => ({ ...prev, require2FA: e.target.checked }))} />
+              Require OTP 2FA on login
+            </label>
+            <button type="submit" className="rounded-2xl bg-emerald-600 text-white px-4 py-3">Promote selected user</button>
           </form>
         </Card>
 
@@ -1238,4 +1359,8 @@ function UploadButton({ label, onFile }) {
       <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onFile(file); e.target.value = ''; }} />
     </label>
   );
+}
+
+function getApiError(err, fallback = 'Request failed') {
+  return err?.response?.data?.error || fallback;
 }

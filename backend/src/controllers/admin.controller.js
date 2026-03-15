@@ -327,6 +327,33 @@ async function pushUserPasswordReset(req, res, next) {
   }
 }
 
+async function resetUserPasswordTemporary(req, res, next) {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const temporaryPassword = `Temp!${Math.random().toString(36).slice(2, 10)}A1`;
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+    await user.update({
+      passwordHash,
+      authMethod: user.authMethod === 'otp' ? 'hybrid' : user.authMethod,
+      isVerified: true,
+    });
+
+    const [revokedSessions] = await RefreshToken.update({ isRevoked: true }, { where: { userId: user.id } });
+    await log(req, 'user.password_reset.temporary', 'user', user.id, { revokedSessions });
+
+    res.json({
+      message: 'Temporary password generated and active sessions revoked',
+      temporaryPassword,
+      revokedSessions,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function forceLogoutUser(req, res, next) {
   try {
     const user = await User.findByPk(req.params.id);
@@ -1010,14 +1037,59 @@ async function listAdminAccounts(req, res, next) {
 
 async function createAdminAccount(req, res, next) {
   try {
-    const username = req.body.username?.trim();
-    const phone = req.body.phone?.trim();
-    const password = req.body.password;
+    const existingUserId = req.body.existingUserId?.trim();
+    let username = req.body.username?.trim();
+    let phone = req.body.phone?.trim();
+    let password = req.body.password;
     const require2FA = req.body.require2FA !== false;
     const requestedRole = (req.body.role || '').trim();
     const role = MANAGEABLE_ADMIN_ROLES.includes(requestedRole)
       ? requestedRole
       : ADMIN_ROLES.MODERATOR;
+
+    let sourceUser = null;
+    if (existingUserId) {
+      sourceUser = await User.findByPk(existingUserId, {
+        attributes: ['id', 'name', 'phone'],
+      });
+      if (!sourceUser) {
+        return res.status(404).json({ error: 'Selected user was not found' });
+      }
+
+      if (!sourceUser.phone) {
+        return res.status(400).json({ error: 'Selected user has no phone number' });
+      }
+
+      phone = sourceUser.phone.trim();
+      if (!username) {
+        const normalized = String(sourceUser.name || sourceUser.phone)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 60);
+        username = normalized || `admin_${String(sourceUser.id).slice(0, 8)}`;
+      }
+    }
+
+    if (!username || username.length < 3 || username.length > 80) {
+      return res.status(400).json({ error: 'Username must be between 3 and 80 characters' });
+    }
+    if (!phone || phone.length < 6 || phone.length > 20) {
+      return res.status(400).json({ error: 'Phone must be between 6 and 20 characters' });
+    }
+
+    let generatedPassword = null;
+    if (!password) {
+      if (!sourceUser) {
+        return res.status(400).json({ error: 'Password is required when not promoting an existing user' });
+      }
+      generatedPassword = `Temp!${Math.random().toString(36).slice(2, 10)}A1`;
+      password = generatedPassword;
+    }
+
+    if (String(password).length < 8 || String(password).length > 120) {
+      return res.status(400).json({ error: 'Password must be between 8 and 120 characters' });
+    }
 
     if (role === ADMIN_ROLES.SUPER_ADMIN) {
       const activeSuperAdmins = await AdminAccount.count({
@@ -1046,7 +1118,11 @@ async function createAdminAccount(req, res, next) {
     });
 
     await log(req, 'admin.create', 'admin_account', admin.id, { username, phone, require2FA, role });
-    res.status(201).json({ admin: adminPublic(admin) });
+    res.status(201).json({
+      admin: adminPublic(admin),
+      generatedPassword,
+      sourceUserId: sourceUser?.id || null,
+    });
   } catch (err) {
     next(err);
   }
@@ -1205,6 +1281,7 @@ module.exports = {
   restoreUser,
   verifyUser,
   pushUserPasswordReset,
+  resetUserPasswordTemporary,
   forceLogoutUser,
   listSupportTickets,
   respondSupportTicket,

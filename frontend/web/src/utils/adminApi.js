@@ -19,6 +19,9 @@ adminApi.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       useAdminStore.getState().clearAdminAuth();
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
+        window.location.href = '/admin/login';
+      }
     }
     return Promise.reject(err);
   }

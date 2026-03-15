@@ -37,6 +37,7 @@ router.patch('/users/:id/suspend', requireAdminRoles(MODERATION_STAFF), [
 router.patch('/users/:id/restore', requireAdminRoles(MODERATION_STAFF), admin.restoreUser);
 router.patch('/users/:id/verify', requireAdminRoles(SUPPORT_STAFF), admin.verifyUser);
 router.post('/users/:id/push-reset-password', requireAdminRoles(SUPPORT_STAFF), admin.pushUserPasswordReset);
+router.post('/users/:id/reset-password-temp', requireAdminRoles(SUPPORT_STAFF), admin.resetUserPasswordTemporary);
 router.post('/users/:id/force-logout', requireAdminRoles(SUPPORT_STAFF), admin.forceLogoutUser);
 router.get('/support-tickets', requireAdminRoles(SUPPORT_STAFF), admin.listSupportTickets);
 router.patch('/support-tickets/:id/respond', requireAdminRoles(SUPPORT_STAFF), [
@@ -104,9 +105,10 @@ router.delete('/privacy/delete/:id', requireAdminRoles([ADMIN_ROLES.SUPER_ADMIN]
 
 router.get('/admin-accounts', requireAdminRoles([ADMIN_ROLES.SUPER_ADMIN]), admin.listAdminAccounts);
 router.post('/admin-accounts', requireAdminRoles([ADMIN_ROLES.SUPER_ADMIN]), [
-  body('username').isString().isLength({ min: 3, max: 80 }),
-  body('phone').isString().isLength({ min: 6, max: 20 }),
-  body('password').isString().isLength({ min: 8, max: 120 }),
+  body('existingUserId').optional().isString().notEmpty(),
+  body('username').optional().isString().isLength({ min: 3, max: 80 }),
+  body('phone').optional().isString().isLength({ min: 6, max: 20 }),
+  body('password').optional().isString().isLength({ min: 8, max: 120 }),
   body('require2FA').optional().isBoolean(),
   body('role').optional().isIn(['super_admin', 'moderator', 'support', 'security']),
 ], validate, admin.createAdminAccount);

@@ -14,6 +14,10 @@ services:
         value: 10000
       - key: DB_DIALECT
         value: sqlite
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: false
       - key: SQLITE_STORAGE
         value: /tmp/dev.sqlite
       - key: FRONTEND_URLS

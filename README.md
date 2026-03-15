@@ -102,6 +102,16 @@ SQLITE_STORAGE=./dev.sqlite
 
 If you prefer MySQL, change `DB_DIALECT=mysql` and fill MySQL credentials.
 
+For persistent cloud deployments (recommended), use Postgres:
+
+```env
+DB_DIALECT=postgres
+DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DBNAME
+DB_SSL=true
+```
+
+`DB_SSL=true` is typically required for hosted Postgres providers.
+
 ### 2. Backend
 
 ```bash
@@ -160,6 +170,14 @@ Admin panel includes:
 PORT=3001
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
+
+DB_DIALECT=sqlite
+SQLITE_STORAGE=./dev.sqlite
+
+# Postgres (recommended for production persistence)
+# DB_DIALECT=postgres
+# DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DBNAME
+# DB_SSL=true
 
 DB_HOST=localhost
 DB_PORT=3306

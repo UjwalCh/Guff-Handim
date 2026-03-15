@@ -8,10 +8,18 @@ export const useAuthStore = create(
       user: null,
       accessToken: null,
       isAuthenticated: false,
+      hasHydrated: false,
 
       setAuth: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
-      setAccessToken: (accessToken) => set({ accessToken }),
-      setUser: (user) => set({ user }),
+      setAccessToken: (accessToken) => set((state) => ({
+        accessToken,
+        isAuthenticated: !!state.user && !!accessToken,
+      })),
+      setUser: (user) => set((state) => ({
+        user,
+        isAuthenticated: !!user && !!state.accessToken,
+      })),
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       logout: () => {
         clearKeys();
@@ -25,6 +33,9 @@ export const useAuthStore = create(
         accessToken: s.accessToken,
         isAuthenticated: !!s.user && !!s.accessToken && s.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
