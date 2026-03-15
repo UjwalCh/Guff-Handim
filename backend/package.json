@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "End-to-end encrypted WhatsApp-like chat backend",
   "main": "src/app.js",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js"
