@@ -214,6 +214,56 @@ async function listUsers(req, res, next) {
   }
 }
 
+async function getUserDetails(req, res, next) {
+  try {
+    const user = await User.findByPk(req.params.id, {
+      attributes: [
+        'id', 'phone', 'email', 'name', 'avatar', 'bio', 'isVerified', 'isOnline', 'lastSeen',
+        'isActive', 'isSuspended', 'suspendedReason', 'suspendedUntil', 'createdAt', 'updatedAt',
+      ],
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const [messageCount, chatCount, activeSessionCount, latestOtp, warningSetting, reports] = await Promise.all([
+      Message.count({ where: { senderId: user.id } }),
+      ChatMember.count({ where: { userId: user.id, isActive: true } }),
+      RefreshToken.count({ where: { userId: user.id, isRevoked: false } }),
+      user.phone
+        ? OTP.findOne({
+            where: { phone: user.phone },
+            order: [['createdAt', 'DESC']],
+            attributes: ['phone', 'attempts', 'isUsed', 'createdAt', 'expiresAt'],
+          })
+        : null,
+      SystemSetting.findByPk(`user_warning:${user.id}`),
+      Report.findAll({
+        where: { reporterId: user.id },
+        attributes: ['id', 'targetType', 'targetId', 'reason', 'status', 'createdAt'],
+        order: [['createdAt', 'DESC']],
+        limit: 10,
+      }),
+    ]);
+
+    const warnings = Array.isArray(warningSetting?.value?.warnings) ? warningSetting.value.warnings : [];
+
+    res.json({
+      user,
+      summary: {
+        messageCount,
+        chatCount,
+        activeSessionCount,
+        warningCount: warnings.length,
+      },
+      latestOtp,
+      warnings: warnings.slice(-10).reverse(),
+      recentReports: reports,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function suspendUser(req, res, next) {
   try {
     const { reason, until } = req.body;
@@ -1150,6 +1200,7 @@ module.exports = {
   updateLanding,
   uploadLandingAsset,
   listUsers,
+  getUserDetails,
   suspendUser,
   restoreUser,
   verifyUser,

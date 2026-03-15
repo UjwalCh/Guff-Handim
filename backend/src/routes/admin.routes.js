@@ -29,6 +29,7 @@ router.put('/landing', requireAdminRoles([ADMIN_ROLES.SUPER_ADMIN]), admin.updat
 router.post('/landing/upload', requireAdminRoles([ADMIN_ROLES.SUPER_ADMIN]), upload.single('asset'), admin.uploadLandingAsset);
 
 router.get('/users', requireAdminRoles(ALL_STAFF), admin.listUsers);
+router.get('/users/:id', requireAdminRoles(ALL_STAFF), admin.getUserDetails);
 router.patch('/users/:id/suspend', requireAdminRoles(MODERATION_STAFF), [
   body('reason').optional().isString(),
   body('until').optional().isISO8601(),

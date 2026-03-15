@@ -143,6 +143,20 @@
   .chat-emoji-panel {
     animation: adminFadeIn 180ms ease-out;
   }
+
+  .ui-pop {
+    transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  }
+
+  .ui-pop:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+    filter: saturate(1.06);
+  }
+
+  .ui-pop:active {
+    transform: translateY(0);
+  }
 }
 
 @keyframes adminFadeIn {

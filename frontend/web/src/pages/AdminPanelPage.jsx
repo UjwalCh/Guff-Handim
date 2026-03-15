@@ -32,6 +32,7 @@ export default function AdminPanelPage() {
   const clearAdminAuth = useAdminStore(s => s.clearAdminAuth);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [userQuery, setUserQuery] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [tabFilter, setTabFilter] = useState('');
   const [theme, setTheme] = useState(() => localStorage.getItem('gh-admin-theme') || 'light');
   const role = admin?.role;
@@ -40,6 +41,8 @@ export default function AdminPanelPage() {
   const isModerator = role === 'moderator' || isLegacyAdmin;
   const isSupport = role === 'support';
   const isSecurity = role === 'security';
+  const isSupportOrSuper = isSupport || isSuperAdmin;
+  const canSecurityControls = isSecurity || isSuperAdmin;
   const roleLabel = {
     super_admin: 'Super Admin',
     moderator: 'Moderator',
@@ -68,6 +71,11 @@ export default function AdminPanelPage() {
     queryKey: ['admin-users', userQuery],
     queryFn: async () => (await adminApi.get('/admin/users', { params: { query: userQuery } })).data,
     refetchInterval: 20000,
+  });
+  const userDetailsQ = useQuery({
+    queryKey: ['admin-user-details', selectedUserId],
+    queryFn: async () => (await adminApi.get(`/admin/users/${selectedUserId}`)).data,
+    enabled: Boolean(selectedUserId),
   });
   const reportsQ = useQuery({
     queryKey: ['admin-reports'],
@@ -416,6 +424,13 @@ export default function AdminPanelPage() {
               {activeTab === 'Users' && (
                 <section className="space-y-4">
                   <input value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="Search users by name, email, or phone" className="w-full md:w-96 rounded-2xl border border-slate-300 px-4 py-3" />
+                  {selectedUserId && (
+                    <UserDetailsDrawer
+                      details={userDetailsQ.data}
+                      loading={userDetailsQ.isLoading}
+                      onClose={() => setSelectedUserId('')}
+                    />
+                  )}
                   <Card title="User Management" subtitle="Suspend, restore, and verify accounts">
                     <div className="overflow-auto">
                       <table className="w-full text-sm">
@@ -442,14 +457,20 @@ export default function AdminPanelPage() {
                                 <StatusBadge label={user.isSuspended ? 'Suspended' : user.isVerified ? 'Verified' : 'Unverified'} tone={user.isSuspended ? 'rose' : user.isVerified ? 'emerald' : 'amber'} />
                               </td>
                               <td className="py-3 flex flex-wrap gap-2">
+                                <ActionButton tone="slate" onClick={() => setSelectedUserId(user.id)}>Details</ActionButton>
                                 {isModerator && (
                                   !user.isSuspended
                                     ? <ActionButton tone="amber" onClick={() => suspendMutation.mutate({ id: user.id, reason: 'Admin action' })}>Suspend</ActionButton>
                                     : <ActionButton tone="emerald" onClick={() => restoreMutation.mutate(user.id)}>Restore</ActionButton>
                                 )}
-                                {isSupport && <ActionButton tone="sky" onClick={() => verifyMutation.mutate(user.id)}>Verify</ActionButton>}
-                                {isSupport && <ActionButton tone="slate" onClick={() => pushResetMutation.mutate(user.id)}>Push Reset OTP</ActionButton>}
-                                {isSupport && <ActionButton tone="rose" onClick={() => adminApi.post(`/admin/users/${user.id}/force-logout`)}>Force Logout</ActionButton>}
+                                {isSupportOrSuper && <ActionButton tone="sky" onClick={() => verifyMutation.mutate(user.id)}>Verify</ActionButton>}
+                                {isSupportOrSuper && <ActionButton tone="slate" onClick={() => pushResetMutation.mutate(user.id)}>Push Reset OTP</ActionButton>}
+                                {isSupportOrSuper && <ActionButton tone="rose" onClick={() => adminApi.post(`/admin/users/${user.id}/force-logout`)}>Force Logout</ActionButton>}
+                                {canSecurityControls && user.phone && (
+                                  <ActionButton tone="amber" onClick={() => createBanMutation.mutate({ type: 'phone', value: user.phone, reason: 'Blocked from user panel' })}>
+                                    Block Phone
+                                  </ActionButton>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -594,7 +615,70 @@ function ActionButton({ tone = 'slate', onClick, children }) {
     sky: 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100',
     slate: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
   };
-  return <button onClick={onClick} className={`px-3 py-2 rounded-xl border text-sm transition ${tones[tone]}`}>{children}</button>;
+  return <button onClick={onClick} className={`px-3 py-2 rounded-xl border text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${tones[tone]}`}>{children}</button>;
+}
+
+function UserDetailsDrawer({ details, loading, onClose }) {
+  return (
+    <Card title="User Detail" subtitle="Deep account view for moderation, support, and security actions.">
+      {loading && <p className="text-sm text-slate-500">Loading user profile...</p>}
+      {!loading && !details && <p className="text-sm text-slate-500">Select a user to inspect details.</p>}
+      {!loading && details && (
+        <div className="grid xl:grid-cols-[1fr_0.95fr] gap-5">
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Profile</p>
+              <p className="text-lg font-semibold mt-2">{details.user.name || 'Unnamed user'}</p>
+              <p className="text-sm text-slate-600 mt-1">{details.user.phone || 'No phone'} · {details.user.email || 'No email'}</p>
+              <p className="text-xs text-slate-500 mt-2">Created {new Date(details.user.createdAt).toLocaleString()}</p>
+              <div className="mt-3 flex gap-2 flex-wrap">
+                <StatusBadge label={details.user.isSuspended ? 'Suspended' : 'Active'} tone={details.user.isSuspended ? 'rose' : 'emerald'} />
+                <StatusBadge label={details.user.isVerified ? 'Verified' : 'Unverified'} tone={details.user.isVerified ? 'sky' : 'amber'} />
+                <StatusBadge label={details.user.isOnline ? 'Online' : 'Offline'} tone={details.user.isOnline ? 'emerald' : 'slate'} />
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <MiniMetric label="Messages sent" value={details.summary?.messageCount || 0} />
+              <MiniMetric label="Active chats" value={details.summary?.chatCount || 0} />
+              <MiniMetric label="Active sessions" value={details.summary?.activeSessionCount || 0} />
+              <MiniMetric label="Warnings" value={details.summary?.warningCount || 0} />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Latest OTP Activity</p>
+              {details.latestOtp ? (
+                <div className="mt-2 text-sm text-slate-600 space-y-1">
+                  <p>Issued: {new Date(details.latestOtp.createdAt).toLocaleString()}</p>
+                  <p>Expires: {new Date(details.latestOtp.expiresAt).toLocaleString()}</p>
+                  <p>Attempts: {details.latestOtp.attempts || 0}</p>
+                  <p>Status: {details.latestOtp.isUsed ? 'Used' : 'Pending'}</p>
+                </div>
+              ) : <p className="mt-2 text-sm text-slate-500">No OTP records found.</p>}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Recent Reports by User</p>
+              <div className="mt-2 space-y-2 max-h-44 overflow-auto pr-1">
+                {(details.recentReports || []).length === 0 && <p className="text-sm text-slate-500">No reports submitted.</p>}
+                {(details.recentReports || []).map((item) => (
+                  <div key={item.id} className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                    <p className="text-sm font-medium">{item.targetType} · {item.reason}</p>
+                    <p className="text-xs text-slate-500 mt-1">{new Date(item.createdAt).toLocaleString()} · {item.status}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mt-4">
+        <button onClick={onClose} className="rounded-2xl bg-slate-950 text-white px-4 py-2.5">Close Detail</button>
+      </div>
+    </Card>
+  );
 }
 
 function BrandingPanel({ branding, onSave, onUpload }) {
